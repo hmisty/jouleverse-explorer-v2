@@ -27,3 +27,13 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# 钱包 / 私钥（Web3 安全）
+*.pem
+*.key
+*.p12
+keystore/
+wallet.json
+.secret
+mnemonic.txt
+accounts.json

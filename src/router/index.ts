@@ -5,12 +5,18 @@ import TransactionDetail from '../views/TransactionDetail.vue'
 import AddressDetail from '../views/AddressDetail.vue'
 import Home from '../views/Home.vue'
 import JNSQuery from '../views/JNSQuery.vue'
+import CoreCheckinStats from '../views/CoreCheckinStats.vue'
 
 const routes = [
   {
     path: '/',
     name: 'home',
     component: Home
+  },
+  {
+    path: '/core/checkin',
+    name: 'coreCheckinStats',
+    component: CoreCheckinStats
   },
   {
     path: '/blocks',

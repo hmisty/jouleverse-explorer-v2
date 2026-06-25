@@ -1,14 +1,23 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import {
+  NConfigProvider,
+  NMessageProvider,
+  NDialogProvider,
+  NNotificationProvider,
+  NLoadingBarProvider,
+} from 'naive-ui'
 import { useWalletStore } from './stores/wallet'
+import { useThemeStore } from './stores/theme'
 
 const walletStore = useWalletStore()
+const themeStore = useThemeStore()
 
 const handleConnect = async () => {
   try {
     await walletStore.connect()
-  } catch (error) {
-    alert('连接钱包失败，请检查 MetaMask 是否已安装')
+  } catch {
+    // 错误由 walletStore 内部处理，UI 通过 NMessage 展示
   }
 }
 
@@ -16,57 +25,90 @@ const handleDisconnect = async () => {
   await walletStore.disconnect()
 }
 
-// 页面加载时检查是否已连接
 onMounted(() => {
   walletStore.checkConnection()
 })
 </script>
 
 <template>
-  <div class="app-container">
-    <!-- Header -->
-    <header class="app-header">
-      <div class="header-left">
-        <router-link to="/" class="logo">
-          <svg width="32" height="32" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="256" cy="256" r="256" fill="#EB1727"/>
-            <path fill="#fefefe" d="M202.4025 130.5h127.195q.2 75-.5 150-5 79.5-82.5 97.5-34.4 6.2-68-3-54.3-18.8-64.5-75.5a133 133 0 0 1-2.5-28h56q3.2 66.9 69 55.5 27-8 33.5-35.5.3-4.3 2-13 .7-49 .5-98a1260 1260 0 0 0-71-1M305.6 226l60 100 60-100"/>
-          </svg>
-          <span class="logo-text">Jscan <span class="beta-tag">V2 Beta</span></span>
-        </router-link>
-      </div>
+  <NConfigProvider
+    :theme="themeStore.naiveTheme"
+    :theme-overrides="themeStore.naiveThemeOverrides"
+  >
+    <NLoadingBarProvider>
+      <NDialogProvider>
+        <NNotificationProvider>
+          <NMessageProvider>
+            <div class="app-container">
+              <!-- Header -->
+              <header class="app-header">
+                <div class="header-left">
+                  <router-link to="/" class="logo">
+                    <svg width="32" height="32" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="256" cy="256" r="256" fill="#EB1727"/>
+                      <path fill="#fefefe" d="M202.4025 130.5h127.195q.2 75-.5 150-5 79.5-82.5 97.5-34.4 6.2-68-3-54.3-18.8-64.5-75.5a133 133 0 0 1-2.5-28h56q3.2 66.9 69 55.5 27-8 33.5-35.5.3-4.3 2-13 .7-49 .5-98a1260 1260 0 0 0-71-1M305.6 226l60 100 60-100"/>
+                    </svg>
+                    <span class="logo-text">Jscan <span class="beta-tag">V2 Beta</span></span>
+                  </router-link>
+                </div>
 
-      <div class="header-right">
-        <!-- 钱包连接区域 -->
-        <div v-if="walletStore.isConnected" class="wallet-info">
-          <div class="wallet-details">
-            <router-link :to="`/address/${walletStore.address}`" class="wallet-address-link">
-              {{ walletStore.formatAddress(walletStore.address) }}
-            </router-link>
-            <span class="wallet-balance">
-              {{ walletStore.formatBalance(walletStore.balance) }} J
-            </span>
-          </div>
-          <button @click="handleDisconnect" class="btn-disconnect">
-            断开
-          </button>
-        </div>
-        <button 
-          v-else 
-          @click="handleConnect" 
-          :disabled="walletStore.isConnecting"
-          class="btn-connect"
-        >
-          {{ walletStore.isConnecting ? '连接中...' : '🔐 连接钱包' }}
-        </button>
-      </div>
-    </header>
+                <div class="header-right">
+                  <!-- 主题切换 -->
+                  <button
+                    class="btn-theme"
+                    :title="themeStore.isDark ? '切换到浅色' : '切换到暗色'"
+                    @click="themeStore.toggle()"
+                    :aria-label="themeStore.isDark ? '切换到浅色模式' : '切换到暗色模式'"
+                  >
+                    <svg v-if="themeStore.isDark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="5"/>
+                      <line x1="12" y1="1" x2="12" y2="3"/>
+                      <line x1="12" y1="21" x2="12" y2="23"/>
+                      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                      <line x1="1" y1="12" x2="3" y2="12"/>
+                      <line x1="21" y1="12" x2="23" y2="12"/>
+                      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                  </button>
 
-    <!-- Main Content -->
-    <main class="app-main">
-      <router-view />
-    </main>
-  </div>
+                  <!-- 钱包连接 -->
+                  <div v-if="walletStore.isConnected" class="wallet-info">
+                    <div class="wallet-details">
+                      <router-link :to="`/address/${walletStore.address}`" class="wallet-address-link">
+                        {{ walletStore.formatAddress(walletStore.address) }}
+                      </router-link>
+                      <span class="wallet-balance">
+                        {{ walletStore.formatBalance(walletStore.balance) }} J
+                      </span>
+                    </div>
+                    <button @click="handleDisconnect" class="btn-disconnect">断开</button>
+                  </div>
+                  <button
+                    v-else
+                    @click="handleConnect"
+                    :disabled="walletStore.isConnecting"
+                    class="btn-connect"
+                  >
+                    {{ walletStore.isConnecting ? '连接中...' : '🔐 连接钱包' }}
+                  </button>
+                </div>
+              </header>
+
+              <!-- Main Content -->
+              <main class="app-main">
+                <router-view />
+              </main>
+            </div>
+          </NMessageProvider>
+        </NNotificationProvider>
+      </NDialogProvider>
+    </NLoadingBarProvider>
+  </NConfigProvider>
 </template>
 
 <style scoped>
@@ -74,25 +116,25 @@ onMounted(() => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--jv-bg-page);
+  color: var(--jv-text-primary);
+  transition: background var(--jv-duration-normal) var(--jv-ease),
+              color var(--jv-duration-normal) var(--jv-ease);
 }
 
-/* Header */
 .app-header {
-  background: white;
-  border-bottom: 2px solid #e2e8f0;
-  padding: 16px 24px;
+  background: var(--jv-bg-surface);
+  border-bottom: 1px solid var(--jv-border);
+  padding: 14px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--jv-shadow-sm);
   position: sticky;
   top: 0;
-  z-index: 100;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
+  z-index: var(--jv-z-header);
+  transition: background var(--jv-duration-normal) var(--jv-ease),
+              border-color var(--jv-duration-normal) var(--jv-ease);
 }
 
 .logo {
@@ -102,36 +144,62 @@ onMounted(() => {
   text-decoration: none;
 }
 
-.logo svg {
-  flex-shrink: 0;
-}
+.logo svg { flex-shrink: 0; }
 
 .logo-text {
-  color: #1e293b;
+  color: var(--jv-text-primary);
   font-size: 1.25rem;
   font-weight: 700;
+  transition: color var(--jv-duration-normal) var(--jv-ease);
 }
 
 .beta-tag {
   font-size: 0.75rem;
   font-weight: 500;
-  background: #dbeafe;
-  color: #2563eb;
+  background: var(--jv-info-bg);
+  color: var(--jv-info);
   padding: 2px 8px;
-  border-radius: 12px;
+  border-radius: var(--jv-radius-full);
   margin-left: 6px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
+  gap: 12px;
 }
 
-/* Wallet Info */
+/* 主题切换按钮 */
+.btn-theme {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--jv-border);
+  border-radius: var(--jv-radius-md);
+  background: transparent;
+  color: var(--jv-text-secondary);
+  cursor: pointer;
+  transition: all var(--jv-duration-fast) var(--jv-ease);
+}
+
+.btn-theme:hover {
+  background: var(--jv-bg-subtle);
+  color: var(--jv-text-primary);
+  border-color: var(--jv-brand);
+}
+
+.btn-theme:focus-visible {
+  outline: 2px solid var(--jv-brand);
+  outline-offset: 2px;
+}
+
+/* 钱包 */
 .wallet-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .wallet-details {
@@ -141,85 +209,80 @@ onMounted(() => {
 }
 
 .wallet-address-link {
-  font-family: 'Courier New', monospace;
-  color: #1e293b;
+  font-family: var(--n-font-family-mono, 'Courier New', monospace);
+  color: var(--jv-text-primary);
   font-weight: 600;
   font-size: 0.85rem;
   text-decoration: none;
-  transition: color 0.2s;
+  transition: color var(--jv-duration-fast);
 }
 
-.wallet-address-link:hover {
-  color: #3b82f6;
-  text-decoration: underline;
-}
+.wallet-address-link:hover { color: var(--jv-link); }
 
 .wallet-balance {
-  color: #64748b;
-  font-size: 0.8rem;
+  color: var(--jv-text-muted);
+  font-size: 0.78rem;
   font-weight: 500;
 }
 
-/* Buttons */
 .btn-connect {
-  background: #3b82f6;
-  color: white;
+  background: var(--jv-brand);
+  color: #fff;
   border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
+  padding: 0 18px;
+  height: 36px;
+  border-radius: var(--jv-radius-md);
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.9rem;
-  transition: all 0.2s;
+  font-size: 0.875rem;
+  transition: background var(--jv-duration-fast) var(--jv-ease),
+              transform var(--jv-duration-fast);
 }
 
 .btn-connect:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--jv-brand-hover);
   transform: translateY(-1px);
 }
 
-.btn-connect:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.btn-connect:active:not(:disabled) {
+  background: var(--jv-brand-pressed);
+  transform: translateY(0);
+}
+
+.btn-connect:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.btn-connect:focus-visible {
+  outline: 2px solid var(--jv-brand);
+  outline-offset: 2px;
 }
 
 .btn-disconnect {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-  padding: 6px 12px;
-  border-radius: 6px;
+  background: var(--jv-error-bg);
+  color: var(--jv-error);
+  border: 1px solid color-mix(in srgb, var(--jv-error) 30%, transparent);
+  padding: 0 12px;
+  height: 32px;
+  border-radius: var(--jv-radius-sm);
   cursor: pointer;
   font-weight: 600;
   font-size: 0.85rem;
-  transition: all 0.2s;
+  transition: background var(--jv-duration-fast);
 }
 
-.btn-disconnect:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
-}
+.btn-disconnect:hover { filter: brightness(0.95); }
 
-/* Main Content */
-.app-main {
-  flex: 1;
-}
+.app-main { flex: 1; }
 </style>
 
 <style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background: #f1f5f9;
-  color: #1e293b;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--jv-bg-page);
+  color: var(--jv-text-primary);
+  transition: background 200ms ease, color 200ms ease;
 }
 
-#app {
-  min-height: 100vh;
-}
+#app { min-height: 100vh; }
 </style>

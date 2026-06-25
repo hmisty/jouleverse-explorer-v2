@@ -29,6 +29,32 @@ export const popbadgeABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  // ---- 全网统计页所需方法 ----
+  {
+    inputs: [],
+    name: 'totalSupply',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'uint256', name: 'index', type: 'uint256' }],
+    name: 'tokenByIndex',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'uint256', name: 'tokenId', type: 'uint256' }],
+    name: 'getPOPInfo',
+    outputs: [
+      { internalType: 'uint256', name: 'jvCoreTokenId', type: 'uint256' },
+      { internalType: 'uint256', name: 'checkInBlockNumber', type: 'uint256' },
+      { internalType: 'uint256', name: 'checkInTimestamp', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const
 
 export type POPBadgeContract = typeof popbadgeABI

@@ -1,0 +1,138 @@
+/* Jouleverse Design System — CSS 变量 Token */
+/* 新功能页面通过 var(--jv-xxx) 使用这些变量，不要硬编码颜色值 */
+
+:root {
+  /* 品牌色 */
+  --jv-brand:          #EB1727;
+  --jv-brand-hover:    #D41422;
+  --jv-brand-pressed:  #B91C1C;
+  --jv-brand-subtle:   #FEF2F2;
+
+  /* 浅色主题（默认） */
+  --jv-bg-page:        #F8FAFC;
+  --jv-bg-surface:     #FFFFFF;
+  --jv-bg-subtle:      #F1F5F9;
+  --jv-bg-hover:       #E8EEF4;
+
+  --jv-text-primary:   #0F172A;
+  --jv-text-secondary: #475569;
+  --jv-text-muted:     #64748B;
+
+  --jv-border:         #E2E8F0;
+  --jv-border-focus:   #EB1727;
+
+  --jv-link:           #2563EB;
+  --jv-link-hover:     #1D4ED8;
+
+  /* 状态色 */
+  --jv-success:        #16A34A;
+  --jv-success-bg:     #F0FDF4;
+  --jv-warning:        #D97706;
+  --jv-warning-bg:     #FFFBEB;
+  --jv-error:          #DC2626;
+  --jv-error-bg:       #FEF2F2;
+  --jv-info:           #2563EB;
+  --jv-info-bg:        #EFF6FF;
+
+  /* 间距 */
+  --jv-space-1:   4px;
+  --jv-space-2:   8px;
+  --jv-space-3:   12px;
+  --jv-space-4:   16px;
+  --jv-space-6:   24px;
+  --jv-space-8:   32px;
+
+  /* 圆角 */
+  --jv-radius-sm:  4px;
+  --jv-radius-md:  8px;
+  --jv-radius-lg:  12px;
+  --jv-radius-xl:  16px;
+  --jv-radius-full: 9999px;
+
+  /* 阴影 */
+  --jv-shadow-sm:  0 1px 2px rgba(0,0,0,0.06);
+  --jv-shadow-md:  0 4px 12px rgba(0,0,0,0.08);
+  --jv-shadow-lg:  0 8px 24px rgba(0,0,0,0.10);
+
+  /* 动效 */
+  --jv-duration-fast:   120ms;
+  --jv-duration-normal: 200ms;
+  --jv-duration-slow:   350ms;
+  --jv-ease:            cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* z-index */
+  --jv-z-dropdown:  200;
+  --jv-z-modal:     300;
+  --jv-z-toast:     400;
+  --jv-z-header:    100;
+}
+
+/* 暗色主题 */
+[data-theme="dark"] {
+  --jv-bg-page:        #0E0F12;
+  --jv-bg-surface:     #17191D;
+  --jv-bg-subtle:      #202329;
+  --jv-bg-hover:       #262A31;
+
+  --jv-text-primary:   #F4F4F5;
+  --jv-text-secondary: #D4D4D8;
+  --jv-text-muted:     #A1A1AA;
+
+  --jv-border:         #2F343D;
+  --jv-border-focus:   #EB1727;
+
+  --jv-link:           #7DD3FC;
+  --jv-link-hover:     #BAE6FD;
+
+  --jv-brand-subtle:   #3B0D0E;
+
+  --jv-success:        #4ADE80;
+  --jv-success-bg:     #052E16;
+  --jv-warning:        #FBBF24;
+  --jv-warning-bg:     #1C1500;
+  --jv-error:          #F87171;
+  --jv-error-bg:       #2D0A0A;
+  --jv-info:           #60A5FA;
+  --jv-info-bg:        #0A1628;
+
+  --jv-shadow-sm:  0 1px 2px rgba(0,0,0,0.30);
+  --jv-shadow-md:  0 4px 12px rgba(0,0,0,0.40);
+  --jv-shadow-lg:  0 8px 24px rgba(0,0,0,0.50);
+}
+
+/* 跟随系统 */
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    --jv-bg-page:        #0E0F12;
+    --jv-bg-surface:     #17191D;
+    --jv-bg-subtle:      #202329;
+    --jv-bg-hover:       #262A31;
+    --jv-text-primary:   #F4F4F5;
+    --jv-text-secondary: #D4D4D8;
+    --jv-text-muted:     #A1A1AA;
+    --jv-border:         #2F343D;
+    --jv-link:           #7DD3FC;
+    --jv-link-hover:     #BAE6FD;
+    --jv-brand-subtle:   #3B0D0E;
+    --jv-success:        #4ADE80;
+    --jv-success-bg:     #052E16;
+    --jv-warning:        #FBBF24;
+    --jv-warning-bg:     #1C1500;
+    --jv-error:          #F87171;
+    --jv-error-bg:       #2D0A0A;
+    --jv-info:           #60A5FA;
+    --jv-info-bg:        #0A1628;
+    --jv-shadow-sm:  0 1px 2px rgba(0,0,0,0.30);
+    --jv-shadow-md:  0 4px 12px rgba(0,0,0,0.40);
+    --jv-shadow-lg:  0 8px 24px rgba(0,0,0,0.50);
+  }
+}
+
+/* prefers-reduced-motion 兜底 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

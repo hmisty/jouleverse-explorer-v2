@@ -38,6 +38,10 @@
               </div>
             </div>
           </div>
+          <div v-if="jnsName" class="info-item">
+            <span class="label">JNS 域名</span>
+            <span class="value jns-name">{{ jnsName }}.j</span>
+          </div>
           <div class="info-item">
             <span class="label">能量余额</span>
             <span class="value">{{ loadingBalance ? '⏳ 加载中...' : formatBalance(balance) }} {{ symbol }}</span>
@@ -139,6 +143,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { formatEther, formatUnits } from 'viem'
 import { WJ_ADDRESS, wjABI } from '../contracts/wj'
+import { JNS_ADDRESS, jnsABI } from '../contracts/jns'
 import WJOperations from './WJOperations.vue'
 import CoreIdSection from './CoreIdSection.vue'
 import { publicClient } from '../config/client'
@@ -181,6 +186,8 @@ function initAddress(raw: string) {
   }
   return true
 }
+
+const jnsName = ref<string | null>(null)
 
 const balance = ref<bigint | null>(null)
 const wjBalance = ref<bigint | null>(null)
@@ -277,6 +284,20 @@ const loadWJBalance = async () => {
     wjBalance.value = null
   } finally {
     loadingWJ.value = false
+  }
+}
+
+const loadJnsName = async () => {
+  try {
+    const name = await publicClient.readContract({
+      address: JNS_ADDRESS,
+      abi: jnsABI,
+      functionName: 'addr2name',
+      args: [hexAddress.value as `0x${string}`],
+    }) as string
+    jnsName.value = name || null
+  } catch {
+    jnsName.value = null
   }
 }
 
@@ -404,6 +425,7 @@ onMounted(async () => {
 
   loadBalance()
   loadWJBalance()
+  loadJnsName()
 
   if (props.blockNumber) {
     const targetBlockNum = Number(props.blockNumber)
@@ -719,6 +741,12 @@ onMounted(async () => {
   background: #3b82f6;
   color: white;
   vertical-align: middle;
+}
+
+.jns-name {
+  font-weight: 600;
+  color: var(--jv-brand);
+  font-size: 1.05rem;
 }
 
 .all-formats {

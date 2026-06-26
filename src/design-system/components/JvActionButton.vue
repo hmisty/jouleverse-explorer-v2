@@ -50,6 +50,17 @@ function handleClick(ev: MouseEvent) {
     :loading="loading"
     class="jv-action-btn"
     :class="{ 'jv-action-btn--success': success }"
+    :style="success ? {
+      '--n-border': '1px solid var(--jv-success)',
+      '--n-border-hover': '1px solid var(--jv-success)',
+      '--n-border-disabled': '1px solid var(--jv-success)',
+      '--n-text-color': 'var(--jv-success)',
+      '--n-text-color-hover': 'var(--jv-success)',
+      '--n-text-color-disabled': 'var(--jv-success)',
+      '--n-color': 'transparent',
+      '--n-color-hover': 'var(--jv-success-bg)',
+      '--n-color-disabled': 'transparent',
+    } : undefined"
     v-bind="$attrs"
     @click="handleClick"
   >
@@ -78,7 +89,6 @@ function handleClick(ev: MouseEvent) {
 }
 
 .jv-action-btn--success {
-  border-color: var(--jv-success) !important;
-  color: var(--jv-success) !important;
+  /* 颜色通过 Naive UI CSS 变量注入（:style 绑定），无需 !important */
 }
 </style>

@@ -71,7 +71,7 @@ onMounted(() => stats.init())
       class="integrity-alert"
     >
       <template v-if="stats.currentMonthIntegrity.value.status === 'warning'">
-        <NButton size="tiny" type="primary" @click="stats.loadMore()">重新加载</NButton>
+        <NButton size="tiny" type="primary" @click="stats.retryFailed()">重试失败数据</NButton>
       </template>
     </NAlert>
 
@@ -248,7 +248,7 @@ onMounted(() => stats.init())
 
 /* 月份卡片 */
 .month-card {
-  background: var(--jv-bg-card);
+  background: var(--jv-bg-surface);
   border: 1px solid var(--jv-border);
   border-radius: var(--jv-radius-lg);
   overflow: hidden;

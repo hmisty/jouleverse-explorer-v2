@@ -48,14 +48,15 @@ interface MonthData {
 }
 
 export function useCheckinStats() {
-  // 内部状态（非响应式，不需要触发渲染）
+  // 内部状态（非响应式）
   const cache: (TokenData | null)[] = []
   const monthsMap: Record<string, MonthData> = {}
   const monthKeysArr: string[] = []
+  const failedTokenIds = new Set<bigint>()
   let totalSupplyVal = 0
   let nextLoadStartId = -1
-  let isFindingFirst = true
   let isAutoLoadingForCurrent = false
+  let loadingGeneration = 0  // 用于取消过期的异步回调
 
   // 响应式状态
   const totalSupply = ref(0)
@@ -70,6 +71,28 @@ export function useCheckinStats() {
   const canGoNextMonth = ref(false)
   const error = ref<string | null>(null)
 
+  function resetState() {
+    for (const k of Object.keys(monthsMap)) delete monthsMap[k]
+    monthKeysArr.length = 0
+    cache.length = 0
+    failedTokenIds.clear()
+    nextLoadStartId = -1
+    isAutoLoadingForCurrent = false
+    loadingGeneration++  // 使所有进行中的异步回调失效
+
+    totalSupply.value = 0
+    loadedCount.value = 0
+    hasMoreData.value = true
+    isLoading.value = false
+    monthKeys.value = []
+    currentMonthKey.value = null
+    currentMonthStats.value = null
+    currentMonthIntegrity.value = null
+    canGoPrevMonth.value = false
+    canGoNextMonth.value = false
+    error.value = null
+  }
+
   async function fetchTotalSupply() {
     const supply = await publicClient.readContract({
       address: POPBADGE_ADDRESS,
@@ -83,9 +106,10 @@ export function useCheckinStats() {
     nextLoadStartId = totalSupplyVal - 1
   }
 
-  async function loadBatch(startId: number, count: number): Promise<TokenData[]> {
-    const actualStart = Math.max(0, startId - count + 1)
-    const actualEnd = startId
+  // endId：本批次最高 index（从高到低遍历，endId 即起始点）
+  async function loadBatch(endId: number, count: number): Promise<TokenData[]> {
+    const actualStart = Math.max(0, endId - count + 1)
+    const actualEnd = endId
     const size = actualEnd - actualStart + 1
     const indices = Array.from({ length: size }, (_, i) => actualStart + i)
 
@@ -101,7 +125,7 @@ export function useCheckinStats() {
       )
     )
 
-    // 第二步：并行取 POPInfo（单个失败不影响整批）
+    // 第二步：并行取 POPInfo，单个失败记录到 failedTokenIds 不影响整批
     const popInfos = await Promise.all(
       tokenIds.map(tokenId =>
         publicClient.readContract({
@@ -109,7 +133,7 @@ export function useCheckinStats() {
           abi: popbadgeABI,
           functionName: 'getPOPInfo',
           args: [tokenId],
-        }).catch(() => null)
+        }).catch(() => { failedTokenIds.add(tokenId); return null })
       )
     )
 
@@ -138,6 +162,65 @@ export function useCheckinStats() {
 
     loadedCount.value = cache.filter(t => t !== null).length
     return results
+  }
+
+  // 重试所有失败的 tokenId（getPOPInfo 之前曾报错的）
+  async function retryFailed() {
+    if (failedTokenIds.size === 0 || isLoading.value) return
+    isLoading.value = true
+    const gen = loadingGeneration
+
+    try {
+      const toRetry = [...failedTokenIds]
+      failedTokenIds.clear()
+
+      const popInfos = await Promise.all(
+        toRetry.map(tokenId =>
+          publicClient.readContract({
+            address: POPBADGE_ADDRESS,
+            abi: popbadgeABI,
+            functionName: 'getPOPInfo',
+            args: [tokenId],
+          }).catch(() => { failedTokenIds.add(tokenId); return null })
+        )
+      )
+
+      if (gen !== loadingGeneration) return
+
+      const tokens: TokenData[] = []
+      for (let i = 0; i < toRetry.length; i++) {
+        const popInfo = popInfos[i]
+        if (!popInfo) continue
+
+        const tokenId = Number(toRetry[i])
+        const coreId = Number(popInfo[0])
+        const blockNumber = Number(popInfo[1])
+        const timestamp = Number(popInfo[2])
+
+        const utc8Timestamp = timestamp + UTC8_OFFSET
+        const date = new Date(utc8Timestamp * 1000)
+        const year = date.getUTCFullYear()
+        const month = date.getUTCMonth() + 1
+        const monthKey = `${year}-${String(month).padStart(2, '0')}`
+        const monthYear = `${year}年${month}月`
+
+        const data: TokenData = { tokenId, coreId, blockNumber, timestamp, utc8Timestamp, monthKey, monthYear }
+        cache[tokenId] = data
+        tokens.push(data)
+      }
+
+      loadedCount.value = cache.filter(t => t !== null).length
+
+      if (tokens.length > 0) processNewTokens(tokens)
+
+      if (currentMonthKey.value) {
+        currentMonthIntegrity.value = checkIntegrity(currentMonthKey.value)
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : String(err)
+    } finally {
+      isLoading.value = false
+    }
   }
 
   function insertMonthKey(mk: string) {
@@ -220,6 +303,10 @@ export function useCheckinStats() {
     }
 
     if (actualCount !== expectedCount) {
+      // 所有数据已加载完毕但数量仍不足 → 部分 RPC 失败，可重试
+      if (nextLoadStartId < 0 && failedTokenIds.size > 0) {
+        return { status: 'warning', message: `${actualCount}/${expectedCount} 条，部分数据加载失败（可重试）`, isComplete: false }
+      }
       return { status: 'loading', message: `加载中 ${actualCount}/${expectedCount}`, isComplete: false }
     }
     return { status: 'loading', message: '验证边界中...', isComplete: false }
@@ -283,13 +370,7 @@ export function useCheckinStats() {
 
     if (isAutoLoadingForCurrent && currentMonthKey.value) {
       const ok = checkIntegrity(currentMonthKey.value)
-      if (ok.isComplete) { isAutoLoadingForCurrent = false; isFindingFirst = false; return false }
-      return true
-    }
-
-    if (isFindingFirst) {
-      const ok = checkIntegrity(monthKeysArr[0])
-      if (ok.isComplete) { isFindingFirst = false; return false }
+      if (ok.isComplete) { isAutoLoadingForCurrent = false; return false }
       return true
     }
 
@@ -298,6 +379,7 @@ export function useCheckinStats() {
 
   async function loadMore() {
     if (isLoading.value || !hasMoreData.value) return
+    const gen = loadingGeneration  // 捕获当前代，用于检测过期结果
 
     isLoading.value = true
     const batchSize = Math.min(BATCH_SIZE, nextLoadStartId + 1)
@@ -313,14 +395,17 @@ export function useCheckinStats() {
       const tokens = await loadBatch(nextLoadStartId, batchSize)
       nextLoadStartId -= batchSize
 
+      if (gen !== loadingGeneration) return  // 月份已切换，丢弃本批结果
+
       processNewTokens(tokens)
 
       if (currentMonthKey.value) {
         currentMonthIntegrity.value = checkIntegrity(currentMonthKey.value)
       }
 
+      // 默认展示最新月份（monthKeysArr 升序，最后一项最新）
       if (!currentMonthKey.value && monthKeysArr.length > 0) {
-        displayMonth(monthKeysArr[0])
+        displayMonth(monthKeysArr[monthKeysArr.length - 1])
       }
 
       hasMoreData.value = nextLoadStartId >= 0
@@ -342,11 +427,11 @@ export function useCheckinStats() {
     if (!currentMonthKey.value) return
     const idx = monthKeysArr.indexOf(currentMonthKey.value)
     if (idx < monthKeysArr.length - 1) {
+      loadingGeneration++  // 使当前进行中的自动加载失效
       const target = monthKeysArr[idx + 1]
       displayMonth(target)
       if (hasMoreData.value && !monthsMap[target]?.isComplete) {
         isAutoLoadingForCurrent = true
-        isFindingFirst = true
         setTimeout(() => loadMore(), 300)
       }
     }
@@ -354,37 +439,20 @@ export function useCheckinStats() {
 
   function goNextMonth() {
     if (!currentMonthKey.value) return
+    loadingGeneration++  // 使当前进行中的自动加载失效
     const idx = monthKeysArr.indexOf(currentMonthKey.value)
     if (idx > 0) displayMonth(monthKeysArr[idx - 1])
   }
 
   async function init() {
-    // 重置所有状态
-    for (const k of Object.keys(monthsMap)) delete monthsMap[k]
-    monthKeysArr.length = 0
-    cache.length = 0
-    nextLoadStartId = -1
-    isFindingFirst = true
-    isAutoLoadingForCurrent = false
-
-    totalSupply.value = 0
-    loadedCount.value = 0
-    hasMoreData.value = true
-    isLoading.value = false
-    monthKeys.value = []
-    currentMonthKey.value = null
-    currentMonthStats.value = null
-    currentMonthIntegrity.value = null
-    canGoPrevMonth.value = false
-    canGoNextMonth.value = false
-    error.value = null
-
+    resetState()
     try {
       await fetchTotalSupply()
       if (totalSupplyVal === 0) {
         hasMoreData.value = false
         return
       }
+      isAutoLoadingForCurrent = true
       await loadMore()
     } catch (err) {
       error.value = err instanceof Error ? err.message : String(err)
@@ -404,6 +472,7 @@ export function useCheckinStats() {
     canGoNextMonth,
     error,
     loadMore,
+    retryFailed,
     goPrevMonth,
     goNextMonth,
     init,

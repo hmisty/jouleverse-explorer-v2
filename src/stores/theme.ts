@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, watchEffect } from 'vue'
+import { ref, computed, watchEffect, onScopeDispose } from 'vue'
 import { darkTheme } from 'naive-ui'
 import { jvLightTheme, jvDarkTheme } from '../design-system/theme'
 
@@ -26,9 +26,11 @@ export const useThemeStore = defineStore('theme', () => {
     isDark.value ? jvDarkTheme : jvLightTheme
   )
 
-  /* 监听系统主题变化 */
+  /* 监听系统主题变化，store 销毁时清理 */
   const mql = window.matchMedia('(prefers-color-scheme: dark)')
-  mql.addEventListener('change', (e) => { systemIsDark.value = e.matches })
+  const onSystemThemeChange = (e: MediaQueryListEvent) => { systemIsDark.value = e.matches }
+  mql.addEventListener('change', onSystemThemeChange)
+  onScopeDispose(() => mql.removeEventListener('change', onSystemThemeChange))
 
   /* 同步 data-theme 属性到 <html>，供 tokens.css 使用 */
   watchEffect(() => {

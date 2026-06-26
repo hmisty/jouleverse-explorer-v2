@@ -19,9 +19,11 @@ const props = withDefaults(defineProps<{
   label?: string
   size?: 'small' | 'medium' | 'large'
   round?: boolean
+  bordered?: boolean
 }>(), {
   size: 'small',
   round: true,
+  bordered: false,
 })
 
 type NTagType = 'default' | 'success' | 'warning' | 'error' | 'info' | 'primary'
@@ -53,7 +55,7 @@ const displayLabel = computed(() => props.label ?? resolved.value.defaultLabel)
     :type="resolved.type"
     :size="size"
     :round="round"
-    :bordered="false"
+    :bordered="bordered"
   >
     {{ displayLabel }}
   </NTag>

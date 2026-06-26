@@ -59,7 +59,7 @@ const defaultMeta: Record<PageStateType, { title: string; desc: string }> = {
         </svg>
 
         <!-- 网络异常 -->
-        <svg v-if="type === 'network-error'" class="jv-state-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg v-else-if="type === 'network-error'" class="jv-state-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="32" cy="32" r="28" stroke="var(--jv-border)" stroke-width="2"/>
           <path d="M20 44 C20 28 44 28 44 44" stroke="var(--jv-error)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
           <path d="M14 38 C14 22 50 22 50 38" stroke="var(--jv-error)" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.5"/>
@@ -104,7 +104,6 @@ const defaultMeta: Record<PageStateType, { title: string; desc: string }> = {
           <line x1="8" y1="8" x2="56" y2="56" stroke="var(--jv-text-muted)" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
         </svg>
 
-        <!-- 默认空状态 / search-empty：使用 NEmpty 内置图标，不覆盖 -->
       </template>
 
       <!-- 补充说明文字 -->

@@ -94,6 +94,7 @@ async function handleCopy() {
       :class="{ 'jv-hash__copy--ok': copied }"
       :aria-label="copied ? '已复制' : '复制'"
       :title="copied ? '已复制' : '复制'"
+      aria-live="polite"
       @click.stop="handleCopy"
     >
       <!-- 复制图标 -->

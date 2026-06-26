@@ -213,7 +213,7 @@ onMounted(() => {
 }
 
 .checkin-block {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--jv-border);
   border-radius: 12px;
   padding: 20px;
 }
@@ -221,54 +221,54 @@ onMounted(() => {
 .checkin-block h3 {
   margin: 0 0 12px 0;
   font-size: 1.05rem;
-  color: #1e293b;
+  color: var(--jv-text-primary);
 }
 
 .wallet-prompt {
-  background: #eff6ff;
-  border-color: #3b82f6 !important;
+  background: var(--jv-info-bg);
+  border-color: var(--jv-info) !important;
 }
 
 .wallet-prompt h3 {
-  color: #1e40af;
+  color: var(--jv-info);
 }
 
 .wallet-prompt p {
   margin: 0;
-  color: #1e40af;
+  color: var(--jv-info);
 }
 
 .wallet-warning {
-  background: #fef3c7;
-  border-color: #f59e0b !important;
+  background: var(--jv-warning-bg);
+  border-color: var(--jv-warning) !important;
 }
 
 .wallet-warning h3 {
-  color: #92400e;
+  color: var(--jv-warning);
 }
 
 .wallet-warning p {
   margin: 8px 0;
-  color: #92400e;
+  color: var(--jv-warning);
 }
 
 .checkin-panel {
-  background: #f8fafc;
+  background: var(--jv-bg-page);
 }
 
 .wallet-info-badge {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #dcfce7;
-  border: 1px solid #22c551;
+  background: var(--jv-success-bg);
+  border: 1px solid var(--jv-success);
   border-radius: 8px;
   padding: 8px 16px;
   margin-bottom: 16px;
 }
 
 .wallet-info-badge .badge {
-  color: #15803d;
+  color: var(--jv-success);
   font-weight: 600;
 }
 
@@ -280,13 +280,13 @@ onMounted(() => {
 }
 
 .wallet-info-badge .status.live {
-  background: #dcfce7;
-  color: #15803d;
+  background: var(--jv-success-bg);
+  color: var(--jv-success);
 }
 
 .wallet-info-badge .status.expired {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--jv-error-bg);
+  color: var(--jv-error);
 }
 
 .checkin-stats {

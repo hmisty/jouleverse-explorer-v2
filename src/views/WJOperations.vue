@@ -241,57 +241,57 @@ const handleTransfer = async () => {
 }
 
 .info-section h2 {
-  color: #1e293b;
+  color: var(--jv-text-primary);
   margin: 0 0 20px 0;
   font-size: 1.25rem;
 }
 
 .wallet-prompt {
-  background: #eff6ff;
-  border-color: #3b82f6 !important;
+  background: var(--jv-info-bg);
+  border-color: var(--jv-info) !important;
 }
 
 .wallet-prompt h2 {
-  color: #1e40af;
+  color: var(--jv-info);
 }
 
 .wallet-prompt p {
   margin: 0 0 12px 0;
-  color: #1e40af;
+  color: var(--jv-info);
 }
 
 .wallet-warning {
-  background: #fef3c7;
-  border-color: #f59e0b !important;
+  background: var(--jv-warning-bg);
+  border-color: var(--jv-warning) !important;
 }
 
 .wallet-warning h2 {
-  color: #92400e;
+  color: var(--jv-warning);
 }
 
 .wallet-warning p {
   margin: 8px 0;
-  color: #92400e;
+  color: var(--jv-warning);
 }
 
 .wallet-info-badge {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #dcfce7;
-  border: 1px solid #22c551;
+  background: var(--jv-success-bg);
+  border: 1px solid var(--jv-success);
   border-radius: 8px;
   padding: 8px 16px;
   margin-bottom: 20px;
 }
 
 .wallet-info-badge .badge {
-  color: #15803d;
+  color: var(--jv-success);
   font-weight: 600;
 }
 
 .wallet-info-badge .balance {
-  color: #166534;
+  color: var(--jv-success);
 }
 
 .operation-tabs {

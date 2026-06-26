@@ -894,13 +894,13 @@ onUnmounted(() => {
 
 /* WebSocket 状态样式 */
 .ws-status {
-  color: #22c55e;
+  color: var(--jv-success);
 }
 
 /* 新区块高亮样式 */
 .new-block {
-  background: #dcfce7 !important;
-  border-color: #22c55e !important;
+  background: var(--jv-success-bg) !important;
+  border-color: var(--jv-success) !important;
   animation: slideIn 0.3s ease-out;
 }
 

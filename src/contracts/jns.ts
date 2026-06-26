@@ -148,9 +148,3 @@ export const jnsABI = [
 ] as const
 
 export type JNSContract = typeof jnsABI
-
-// 添加调试日志
-if (typeof console !== 'undefined') {
-  console.log('=== jns.ts Module Load ===')
-  console.log('JNS_ADDRESS:', JNS_ADDRESS)
-}

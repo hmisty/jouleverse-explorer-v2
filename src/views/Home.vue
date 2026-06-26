@@ -310,20 +310,24 @@ const fetchAllTimelockData = async () => {
   }
 }
 
+// Jouleverse 创世区块时间戳（block 0，固定不变）
+const GENESIS_TIMESTAMP = 1664451960
+
 const fetchLatestBlocks = async () => {
   loading.value = true
   try {
     const latest = await publicClient.getBlockNumber()
     const latestNumber = Number(latest)
 
-    // 获取创世区块（block 0）的时间戳
-    const genesisBlock = await publicClient.getBlock({ blockNumber: 0n })
-    if (genesisBlock) {
-      networkUptime.value = formatUptime(Number(genesisBlock.timestamp))
-    }
+    networkUptime.value = formatUptime(GENESIS_TIMESTAMP)
 
-    // 获取最新区块检查网络状态
-    const latestBlockData = await publicClient.getBlock({ blockNumber: latest })
+    // 并行获取最新区块 + 最近 10 个区块
+    const blockNumbers = Array.from({ length: 10 }, (_, i) => latest - BigInt(i))
+    const [latestBlockData, ...recentBlocks] = await Promise.all([
+      publicClient.getBlock({ blockNumber: latest }),
+      ...blockNumbers.map(blockNumber => publicClient.getBlock({ blockNumber })),
+    ])
+
     if (latestBlockData) {
       latestBlock.value = {
         number: latestNumber,
@@ -333,29 +337,20 @@ const fetchLatestBlocks = async () => {
         gasUsed: latestBlockData.gasUsed,
       }
 
-      // 检查网络状态
       const currentTime = Math.floor(Date.now() / 1000)
       const timeDiff = currentTime - Number(latestBlockData.timestamp)
       networkStatus.value = timeDiff < 300 ? 'online' : 'offline'
     }
 
-    // 获取最近10个区块
-    const newBlocks: Block[] = []
-    for (let i = 0; i < 10; i++) {
-      const blockNumber = latest - BigInt(i)
-      const block = await publicClient.getBlock({ blockNumber })
-      if (block) {
-        newBlocks.push({
-          number: Number(block.number),
-          hash: block.hash || '',
-          timestamp: Number(block.timestamp),
-          transactions: block.transactions as string[],
-          gasUsed: block.gasUsed,
-        })
-      }
-    }
-    
-    blocks.value = newBlocks
+    blocks.value = recentBlocks
+      .filter(Boolean)
+      .map(block => ({
+        number: Number(block!.number),
+        hash: block!.hash || '',
+        timestamp: Number(block!.timestamp),
+        transactions: block!.transactions as string[],
+        gasUsed: block!.gasUsed,
+      }))
   } catch (error) {
     console.error('Failed to fetch blocks:', error)
     networkStatus.value = 'offline'

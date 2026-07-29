@@ -28,9 +28,12 @@
         <h3>签到徽章历史</h3>
         <div v-if="popHistory.length === 0" class="empty-state">暂无签到记录</div>
         <div v-else>
+          <p class="pop-summary">
+            共持有 <strong>{{ popHistoryTotal }}</strong> 个签到徽章{{ popHistoryTruncated ? `，仅显示最近 ${popHistory.length} 个` : '' }}
+          </p>
           <div class="pop-badge-list">
             <div
-              v-for="entry in popHistory"
+              v-for="entry in popHistory.slice(0, popDisplayCount)"
               :key="entry.tokenId.toString()"
               class="pop-badge"
               :class="{ invalid: !entry.isValid }"
@@ -39,8 +42,13 @@
               <div class="pop-month">{{ entry.monthLabel }}</div>
             </div>
           </div>
+          <div v-if="hasMorePop" class="pop-more">
+            <button class="btn-load-more" @click="loadMorePop">
+              加载更多（已显示 {{ Math.min(popDisplayCount, popHistory.length) }} / {{ Math.min(popHistory.length, MAX_POP_DISPLAY) }}）
+            </button>
+          </div>
           <p v-if="popHistoryTruncated" class="pop-truncated-hint">
-            仅显示最近 {{ popHistory.length }} 条，共 {{ popHistoryTotal }} 条
+            前往 <a href="#" @click.prevent="$router.push('/core/checkin')">全网签到统计页</a> 可查看全部签到记录
           </p>
         </div>
       </div>
@@ -61,7 +69,9 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const { coreIds, popHistory, popHistoryTotal, popHistoryTruncated, isLoading, error, load } = useCoreId(props.address)
+const { coreIds, popHistory, popHistoryTotal, popHistoryTruncated, popDisplayCount, hasMorePop, loadMorePop, isLoading, error, load } = useCoreId(props.address)
+
+const MAX_POP_DISPLAY = 10
 
 const coreId = computed(() => (coreIds.value.length > 0 ? coreIds.value[0].tokenId : null))
 const metadata = computed(() => (coreIds.value.length > 0 ? coreIds.value[0].metadata : null))
@@ -154,5 +164,31 @@ onMounted(() => {
   margin-top: 8px;
   font-size: 0.82rem;
   color: var(--jv-text-muted);
+}
+
+.pop-summary {
+  margin: 0 0 12px 0;
+  font-size: 0.88rem;
+  color: var(--jv-text-primary);
+}
+
+.pop-more {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.btn-load-more {
+  padding: 6px 16px;
+  border: 1px solid var(--jv-border);
+  border-radius: var(--jv-radius-md);
+  background: var(--jv-bg-subtle);
+  color: var(--jv-text-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.btn-load-more:hover {
+  background: var(--jv-bg-hover);
 }
 </style>

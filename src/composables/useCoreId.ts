@@ -121,8 +121,8 @@ export function useCoreId(address: string) {
       return { tokenId, metadata, monthLabel, isValid }
     })
 
-    // 按tokenId升序排序，与v1一致
-    result.sort((a, b) => (a.tokenId < b.tokenId ? -1 : a.tokenId > b.tokenId ? 1 : 0))
+    // 按tokenId降序排序（最新在前），方便用户查看近期签到
+    result.sort((a, b) => (a.tokenId > b.tokenId ? -1 : a.tokenId < b.tokenId ? 1 : 0))
     popHistory.value = result
   }
 

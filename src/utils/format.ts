@@ -12,3 +12,8 @@ export function formatAge(timestamp: number | bigint): string {
 export function formatNumber(num: bigint): string {
   return formatUnits(num, 0)
 }
+
+export function formatAddress(addr: string): string {
+  if (!addr) return ''
+  return `${addr.substring(0, 10)}...${addr.substring(addr.length - 8)}`
+}

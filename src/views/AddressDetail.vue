@@ -166,6 +166,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { formatEther } from 'viem'
+import { formatAddress } from '../utils/format'
 import { WJ_ADDRESS, wjABI } from '../contracts/wj'
 import { JNS_ADDRESS, jnsABI } from '../contracts/jns'
 import WJOperations from './WJOperations.vue'
@@ -225,11 +226,6 @@ const hasPrevYear = computed(() => availableYears.value.length > 0 && currentYea
 const hasNextYear = computed(() => availableYears.value.length > 0 && currentYear.value < availableYears.value[availableYears.value.length - 1])
 
 const formatLabel = computed(() => ({ hex: 'HEX', b32: 'B32', full: 'JVA' }[inputFormat.value]))
-
-const formatAddress = (addr: string): string => {
-  if (!addr) return ''
-  return `${addr.substring(0, 10)}...${addr.substring(addr.length - 8)}`
-}
 
 const displayAddress = computed(() => {
   if (inputFormat.value === 'hex') return hexAddress.value

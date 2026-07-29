@@ -44,7 +44,7 @@
           </div>
           <div v-if="hasMorePop" class="pop-more">
             <button class="btn-load-more" @click="loadMorePop">
-              加载更多（已显示 {{ Math.min(popDisplayCount, popHistory.length) }} / {{ Math.min(popHistory.length, MAX_POP_DISPLAY) }}）
+              加载更多（已显示 {{ Math.min(popDisplayCount, popHistory.length) }} / {{ popHistory.length }}）
             </button>
           </div>
           <p v-if="popHistoryTruncated" class="pop-truncated-hint">
@@ -70,8 +70,6 @@ interface Props {
 const props = defineProps<Props>()
 
 const { coreIds, popHistory, popHistoryTotal, popHistoryTruncated, popDisplayCount, hasMorePop, loadMorePop, isLoading, error, load } = useCoreId(props.address)
-
-const MAX_POP_DISPLAY = 10
 
 const coreId = computed(() => (coreIds.value.length > 0 ? coreIds.value[0].tokenId : null))
 const metadata = computed(() => (coreIds.value.length > 0 ? coreIds.value[0].metadata : null))

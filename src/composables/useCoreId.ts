@@ -7,7 +7,7 @@ import { parseTokenURI } from '../utils/nftMetadata'
 import type { CoreIdInfo, PopHistoryEntry } from '../types/coreid'
 
 // 超过此数量只显示最近的，按 tokenId 降序取高位 index（最新先入）
-const MAX_POP_DISPLAY = 10
+const MAX_POP_DISPLAY = 50
 const POP_BATCH_SIZE = 10
 
 export function useCoreId(address: string) {

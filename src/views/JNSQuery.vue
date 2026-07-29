@@ -181,6 +181,10 @@
           <p>连接钱包后可转移此域名给他人</p>
           <JvActionButton :loading="walletStore.isConnecting" @click="connectWallet">连接钱包</JvActionButton>
         </div>
+        <div v-else-if="!isOwner" class="op-not-owner">
+          <p>当前钱包 {{ walletStore.formatAddress(walletStore.address) }} 不是此域名的所有者</p>
+          <p class="op-hint">只有域名所有者才能转移此域名</p>
+        </div>
         <div v-else class="op-send-form">
           <div class="op-wallet-info">
             <span class="op-label">域名</span>
@@ -540,6 +544,9 @@ const searchDomain = async (domainName?: string) => {
       description,
       attributes,
     }
+
+    // 更新 URL 中的域名参数，支持刷新后保持
+    router.replace({ name: 'jnsDetail', params: { name } })
 
     // 加载持有者的其他域名
     loadOwnerJnsHoldings(owner)

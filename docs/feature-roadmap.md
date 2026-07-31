@@ -1,7 +1,7 @@
 # Jouleverse Explorer v2 — 功能路线图
 
-**文档日期**：2026-06-23  
-**维护人**：zhangxin / claude  
+**文档日期**：2026-07-31  
+**维护人**：zhangxin / claude / 大白  
 **用途**：跟踪 v1 → v2 功能迁移进度 + 新功能规划，作为后续开发的唯一入口文档  
 
 > v2 规划文档（`explorer-v2-mvp-plan.md` / `jouleverse-explorer-refactor-plan.md`，撰写于 2026-03-18）的"V1 功能清单"基于当时的 v1 快照，**遗漏了 v1 在 2026 年 1–3 月新增的功能**（Core ID、JVA/B32 地址）。本文档在此基础上补全，以 v1 当前线上版本（jscan.jnsdao.com）为权威基线。
@@ -29,7 +29,9 @@
 | 15 | GitHub Pages 自动部署 | ✅ 已完成 | `.github/workflows/deploy-pages.yml` | hash路由 + 相对路径 |
 | 16 | Naive UI 设计系统基础 | ✅ 已完成 | `src/design-system/` | 本次实现（2026-06-23） |
 | 17 | 暗色/浅色/系统主题 | ✅ 已完成 | `stores/theme.ts` + `App.vue` | 本次实现 |
-| 18 | 地址交易历史 | ⚠️ 有缺陷 | `AddressDetail.vue` | 当前扫描区块方式翻页大量空白，需改用 getLogs 或索引 API |
+| 18 | 地址交易历史 | ✅ 已完成 | `AddressDetail.vue` | getLogs + 按年翻页（2026-07-25，commit 1b7273c） |
+| 19 | JNS 完整记录展示 | ✅ 已完成 | `JNSDetail.vue` | 域名详情页 + 持有者其他域名 + /jns/:name 路由（2026-07-27，commit c6953b6） |
+| 20 | JNS 域名操作 | ✅ 已完成 | `JNSOperations.vue` | 绑定/解绑/发送J + 钱包连接 + B32支持（2026-07-28，commit 406a0fa） |
 
 ---
 
@@ -47,12 +49,15 @@
 - **状态**：⏸ 待处理（记录于 2026-06-28）
 - **源码位置**：待确认（不在当前 explorer-v2 仓库内）
 
-#### P0-1：地址交易历史 getLogs 重构
-- **问题**：`AddressDetail.vue` 当前扫描全部区块来找某地址的交易，翻页时出现大量空页，且随区块高度增长越来越慢。
-- **正确方案**：改用 `getLogs` 过滤 Transfer/内部交易，或接入链上索引 API（如果 Jouleverse 有）。
-- **v1 现状**：v1 同样用扫描方式（历史遗留，已知慢），但 v2 应趁机修正。
-- **文件**：`src/views/AddressDetail.vue`
-- **参考**：`viem.sh getLogs` / Jouleverse RPC 是否支持 `eth_getLogs`
+#### ✅ P0-1：地址交易历史 getLogs 重构（已完成，2026-07-25）
+- **方案**：改用 `getLogs` 按年查询 Transfer 事件
+  - 新建 `src/utils/timestamp-to-block.ts`：区块1锚点 + 平均出块时间推算各年份区块范围
+  - 重写 `AddressDetail.vue` 交易历史：← 年份 → 翻页导航，覆盖全历史区块
+  - 并行查询转入/转出 Transfer 事件
+  - RPC 调用从 700+ 降至 4
+  - `viem getLogs topics bug` 绕行（改用 raw JSON-RPC 请求，commit 92771ae）
+- **文件**：`src/views/AddressDetail.vue`、`src/utils/timestamp-to-block.ts`
+- **commit**：1b7273c（2026-07-25），后续修复 caf341f / c1623b1 / 92771ae
 
 ---
 
@@ -62,11 +67,10 @@
 - **结论**：JNS `claim(name)` 函数为 owner-only，普通用户无法自助注册域名。v1 中 mint 按钮仅对合约 owner 显示，属于运营方后台工具，非用户侧功能。
 - **待办**：若 JNS 合约升级支持公开注册，再重新评估。
 
-#### P1-2：JNS 完整记录展示
+#### ✅ P1-2：JNS 完整记录展示（已完成，2026-07-27）
 - **说明**：域名详情页展示 JNS 的所有记录（Ethereum address、Twitter、GitHub、description 等 NFT metadata 字段）。
-- **当前 v2 状态**：`JNSQuery.vue` 只有基础查询，记录展示不完整。
-- **参考**：v1 JNS 记录字段定义、`jns.ts` 合约 ABI
-- **文件**：扩展 `JNSQuery.vue` 或拆分 `JNSDetail.vue`
+- **文件**：`JNSDetail.vue`、`/jns/:name` 路由
+- **commit**：c6953b6（2026-07-27）
 
 ---
 
@@ -121,11 +125,9 @@
 
 ### 🔴 严重性能问题
 
-#### PERF-1：地址交易历史串行 RPC 爆炸（`AddressDetail.vue:299-345`）
-- **问题**：`loadTransactions` 对每个区块串行调 `getBlock`，对每笔 tx 串行调 `getTransaction`，匹配后再串行调 `getTransactionReceipt`。10个区块 × N笔 tx，最坏情况数百次串行 RPC。
-- **现象**：页面加载时间极长（数十秒），用户可感知卡死。
-- **解决方案**：改用 `eth_getLogs` 过滤地址相关事件（即 P0-1）。若 Jouleverse RPC 不支持地址过滤，可退化为只并行化：`Promise.all(blocks.map(getBlock))` + 区块内并行 `Promise.all(txHashes.map(getTransaction))`。
-- **关联**：P0-1
+#### ✅ PERF-1：地址交易历史串行 RPC 爆炸（已修复，2026-07-25）
+- **修复**：改用 `eth_getLogs` 按年查询，RPC 调用从 700+ 降至 4。
+- **关联**：✅ P0-1
 
 #### PERF-2：JNS 持有列表无分批保护（待开发功能）
 - **问题**：JNS 为 NFT，某些地址可能持有几十至数百个域名。若全量 `tokenOfOwnerByIndex` 一次打出，可能触发 RPC 限速（`rpc.jnsdao.com:8503` 是小型公共节点）。
@@ -165,7 +167,7 @@
 
 | 优先级 | 问题 | 文件 | 说明 |
 |--------|------|------|------|
-| 🔴 高 | 地址交易历史根本缺陷（见 PERF-1 + P0-1） | `AddressDetail.vue` | 串行 RPC 爆炸，需 getLogs 重构 |
+| ✅ 已修复 | 地址交易历史根本缺陷（见 PERF-1 + P0-1） | `AddressDetail.vue` | getLogs 重构完成（2026-07-25） |
 | 🟡 中 | `formatAddress/formatHash/formatAge` 各文件重复 | 4个View文件 | 应抽 `src/utils/format.ts` 统一 |
 | 🟡 中 | `useBlockchain.ts` 死代码 | `src/composables/useBlockchain.ts` | `Home.vue` 从未 import，确认后删除 |
 | 🟡 中 | `Home.vue` 区块串行加载（见 PERF-4） | `Home.vue:344-356` | for 循环 getBlock x10，改 Promise.all |
@@ -195,20 +197,24 @@ src/design-system/
 
 ```
 立即（性能/体验阻塞）─────────────────────────────
-  PERF-6  删除 jns.ts 模块级 console.log（5分钟，随时可做）
-  PERF-4  Home.vue 区块并行加载（改一行 Promise.all）
-  PERF-3  首页创世区块时间戳硬编码（确认时间戳后10分钟）
-  P0-1    地址交易历史 getLogs 重构（核心体验，最重要）
+  （所有 P0/PERF 已解决 ✅）
 
 近期（功能开发，含性能保护）──────────────────────
-  JNS-1   地址页 JNS 主域名反向显示（addr2name，1次RPC，快）
+  ~JNS-1~  地址页 JNS 主域名反向显示（addr2name）✅ 已完成（PR#3）
   JNS-2   地址页 JNS 持有列表（含 PERF-2 分批加载保护）
-  PERF-5  POP 历史上限保护（随 JNS 持有列表一起加）
-  P1-1    JNS Mint 功能
-  P1-2    JNS 完整记录展示
+  PERF-5  POP 历史上限保护
+  ~~P1-1~~ JNS Mint 功能 — 暂不实现（合约限制）
+  ~~P1-2~~ JNS 完整记录展示 ✅ 已完成（2026-07-27）
 
 已完成 ─────────────────────────────────────────
   ✅ P2-1  全网签到统计页（2026-06-24）
+  ✅ P0-1  地址交易历史 getLogs 重构（2026-07-25）
+  ✅ PERF-1  地址交易历史串行 RPC 爆炸（2026-07-25）
+  ✅ PERF-3  首页创世区块硬编码（2026-06-28 前）
+  ✅ PERF-4  Home.vue 区块并行加载（2026-06-28 前）
+  ✅ PERF-6  jns.ts console.log 删除（2026-06-28 前）
+  ✅ P1-2  JNS 完整记录展示（2026-07-27）
+  ✅ JNS 域名操作 — 绑定/解绑/发送J（2026-07-28）
 
 中期 ───────────────────────────────────────────
   P3-1    JNSVote 治理投票（复杂，单独排期）

@@ -76,6 +76,12 @@
 
 ### P2 — 全网签到统计页（规划文档遗漏功能，第二阶段）
 
+#### ⏳ P2-2：V2 工具集入口页 + V1 工具迁移（2026-08-01 立项）
+- **背景**：V1 工具集入口（`/tools/index.html`）卡片式布局，但框架/风格与主站不统一（Bootstrap 3 + web3.js + 外部 CDN），需按 V2 主站框架（Vue 3 + design-system）重写
+- **方案**：先建 V2 `/tools` 入口页（卡片式分类，未迁移工具外链 V1），再逐步迁移：①合约交互工具（core+contractx 合并，viem 重写）②默克尔证明生成器 ③JNSVote（随 P3-1）
+- **详细方案**：见 `docs/tools-migration.md`
+- **状态**：📋 待开发
+
 #### ✅ P2-1：全网 Core ID 签到统计页 `/#/core/checkin`（已完成，2026-06-24）
 - **来源**：v1 `views/coreCheckInInfo.html` + `coreCheckInInfoController.js`（2026年新增，规划文档未覆盖）
 - **功能**：

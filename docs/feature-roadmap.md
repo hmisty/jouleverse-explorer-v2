@@ -129,14 +129,15 @@
 - **修复**：改用 `eth_getLogs` 按年查询，RPC 调用从 700+ 降至 4。
 - **关联**：✅ P0-1
 
-#### PERF-2：JNS 持有列表无分批保护（待开发功能）
+#### ✅ PERF-2：JNS 持有列表无分批保护（已修复，2026-07-29）
 - **问题**：JNS 为 NFT，某些地址可能持有几十至数百个域名。若全量 `tokenOfOwnerByIndex` 一次打出，可能触发 RPC 限速（`rpc.jnsdao.com:8503` 是小型公共节点）。
 - **当前 ABI 状态**：`jns.ts` 缺少 `balanceOf` 和 `tokenOfOwnerByIndex` 方法，需补充。
-- **解决方案**：
-  1. 先调 `balanceOf(addr)` 拿总数，立即渲染"持有 X 个 JNS 域名"
-  2. 自动加载前 10 个（`tokenOfOwnerByIndex` 0-9），用 `_allTokensName(tokenId)` 获取域名字符串
-  3. 超过 10 个时显示"加载更多"按钮，每次追加 10 个
-  4. 超过 50 个提示"前往 JNS 页查看全部"
+- **解决方案**（已实现）：
+  1. 先调 `balanceOf(addr)` 拿总数，立即渲染"持有 X 个 JNS 域名" ✅
+  2. 自动加载前 10 个（`tokenOfOwnerByIndex` 0-9），用 `_allTokensName(tokenId)` 获取域名字符串 ✅
+  3. 超过 10 个时显示"加载更多"按钮，每次追加 10 个 ✅
+  4. 超过 50 个提示"前往 JNS 页查看全部" ✅
+- **实现**：`AddressDetail.vue` JNS 持有面板（`JNS_BATCH_SIZE=10` / `JNS_MAX_DISPLAY=50`）
 
 ### 🟡 中等性能问题
 
@@ -149,9 +150,10 @@
 - **解决方案**：改为 `await Promise.all(Array.from({length:10}, (_,i) => publicClient.getBlock({blockNumber: latest - BigInt(i)})))`，并行加载，速度约提升 5-8 倍。
 - **关联**：已在代码质量表，提升为性能问题
 
-#### PERF-5：POP 历史加载无上限保护（`useCoreId.ts`）
+#### ✅ PERF-5：POP 历史加载无上限保护（已修复，2026-07-29）
 - **问题**：`loadMyPopHistory` 对地址持有的所有 POP Badge 一次性全量加载（`balanceOf` → 全量 `tokenOfOwnerByIndex` → 全量 `tokenURI`）。每月签到产生 1 个，3 年社区用户约 36 个，目前可接受；但若将来出现异常账号（自动化签到或合约 bug），无任何保护。
-- **解决方案**：加上限（如 `MAX_DISPLAY = 120`），超出时提示"仅显示最近 N 条，共 X 条"。不需要立即实施，随 JNS 持有列表一起加防护意识。
+- **解决方案**（已实现）：加上限 `MAX_POP_DISPLAY=50` + 分批加载 `POP_BATCH_SIZE=10`，显示总持有数，超出时提示"仅显示最近 N 条，共 X 条"。
+- **实现**：`useCoreId.ts`（commit 3a52c0f / 0a2b772，2026-07-29）
 
 ### 🟢 低优先级问题
 
@@ -200,9 +202,9 @@ src/design-system/
   （所有 P0/PERF 已解决 ✅）
 
 近期（功能开发，含性能保护）──────────────────────
-  ~JNS-1~  地址页 JNS 主域名反向显示（addr2name）✅ 已完成（PR#3）
-  JNS-2   地址页 JNS 持有列表（含 PERF-2 分批加载保护）
-  PERF-5  POP 历史上限保护
+  ~~JNS-1~~  地址页 JNS 主域名反向显示（addr2name）✅ 已完成（PR#3）
+  ~~JNS-2~~  地址页 JNS 持有列表（含 PERF-2 分批加载保护）✅ 已完成（2026-07-29）
+  ~~PERF-5~~ POP 历史上限保护 ✅ 已完成（2026-07-29）
   ~~P1-1~~ JNS Mint 功能 — 暂不实现（合约限制）
   ~~P1-2~~ JNS 完整记录展示 ✅ 已完成（2026-07-27）
 
@@ -210,10 +212,13 @@ src/design-system/
   ✅ P2-1  全网签到统计页（2026-06-24）
   ✅ P0-1  地址交易历史 getLogs 重构（2026-07-25）
   ✅ PERF-1  地址交易历史串行 RPC 爆炸（2026-07-25）
+  ✅ PERF-2  JNS 持有列表分批加载保护（2026-07-29）
   ✅ PERF-3  首页创世区块硬编码（2026-06-28 前）
   ✅ PERF-4  Home.vue 区块并行加载（2026-06-28 前）
+  ✅ PERF-5  POP 历史上限保护（2026-07-29）
   ✅ PERF-6  jns.ts console.log 删除（2026-06-28 前）
   ✅ P1-2  JNS 完整记录展示（2026-07-27）
+  ✅ JNS-2  地址页 JNS 持有列表 + 分批加载（2026-07-29）
   ✅ JNS 域名操作 — 绑定/解绑/发送J（2026-07-28）
 
 中期 ───────────────────────────────────────────

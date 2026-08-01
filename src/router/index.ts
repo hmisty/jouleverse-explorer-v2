@@ -6,6 +6,7 @@ import AddressDetail from '../views/AddressDetail.vue'
 import Home from '../views/Home.vue'
 import JNSQuery from '../views/JNSQuery.vue'
 import CoreCheckinStats from '../views/CoreCheckinStats.vue'
+import ToolsHome from '../views/ToolsHome.vue'
 
 const routes = [
   {
@@ -17,6 +18,11 @@ const routes = [
     path: '/core/checkin',
     name: 'coreCheckinStats',
     component: CoreCheckinStats
+  },
+  {
+    path: '/tools',
+    name: 'toolsHome',
+    component: ToolsHome
   },
   {
     path: '/blocks',

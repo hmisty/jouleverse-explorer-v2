@@ -50,6 +50,9 @@ onMounted(() => {
                     </svg>
                     <span class="logo-text">Jscan <span class="beta-tag">V2 Beta</span></span>
                   </router-link>
+                  <nav class="header-nav">
+                    <router-link to="/tools" class="nav-link">工具集</router-link>
+                  </nav>
                 </div>
 
                 <div class="header-right">
@@ -142,6 +145,35 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   text-decoration: none;
+}
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  margin-left: 20px;
+  padding-left: 20px;
+  border-left: 1px solid var(--jv-border);
+}
+
+.nav-link {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--jv-text-secondary);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: var(--jv-radius-md);
+  transition: color var(--jv-duration-fast) var(--jv-ease),
+              background var(--jv-duration-fast) var(--jv-ease);
+}
+
+.nav-link:hover {
+  color: var(--jv-brand);
+  background: var(--jv-brand-subtle);
+}
+
+.nav-link.router-link-active {
+  color: var(--jv-brand);
+  font-weight: 600;
 }
 
 .logo svg { flex-shrink: 0; }

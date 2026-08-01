@@ -45,16 +45,19 @@ V1 工具集入口（`jscan.jnsdao.com/tools/index.html`）为卡片式布局，
 
 ## 三、实施方案
 
-### 第一步：V2 工具集入口页（优先开发）
+### 第一步：V2 工具集入口页（✅ 已完成，2026-08-01）
 
-- 新增路由 `/tools` → `ToolsHome.vue`
-- 使用 design-system 组件（JvCard 等）+ Naive UI 主题，与主站风格统一
-- 卡片式分类布局（精神继承 V1 入口页）：
-  - **合约工具**：合约调用工具（待迁移，先外链 V1）
-  - **空投工具**：默克尔证明生成器（待迁移，先外链 V1）
-  - **链上功能**：JNS 查询、Core 签到统计（已迁移，直达 V2 内页）
-  - **即将推出**：JNSVote、数据分析、多签管理（占位卡片）
-- **外链策略**：未迁移工具暂时外链到 V1 地址（`https://jscan.jnsdao.com/tools/xxx`），迁移一个替换一个
+- 新增路由 `/tools` → `ToolsHome.vue`，`/tools/contract/:key` → `ContractToolView.vue`
+- 使用 design-system 组件 + Naive UI 主题，与主站风格统一
+- **分区设计（核心 vs 生态视觉区分）**：
+  - ⭐ **核心合约工具**（品牌色左边框 + Core 徽章）：JVCore、创世金库（多签）、Timelock、链上红包
+  - 🌿 **生态合约工具**（Ecosystem 徽章）：JNS、JNSVote、WJ、星球、JTI、CryptoJunks、飞翔的J、JNSDAO加V
+  - 🛠️ **通用工具**：自定义 ABI 交互（V1 外链待迁移）、默克尔证明生成器（V1 外链待迁移）
+  - ⛓️ **链上功能**：JNS 查询、Core 签到统计（V2 内页直达）
+  - ⏳ **即将推出**：JNSVote 专属 UI、数据分析、多签管理（占位）
+- **每合约独立成工具、一步直达**：`/tools/contract/:key`，通用 `ContractTool.vue` 组件（传 ABI + 地址自动生成函数列表/参数表单/事件查询），新增合约只需改 `src/contracts/toolbox.ts` 注册表
+- **合约注册表**：`src/contracts/toolbox.ts`（12 个合约：地址来自 V1 deployments.js，ABI 从 V1 misc 提取，已全部验证合约存在 + readContract 可用）
+- header 导航「工具集」入口 + 首页快速链接
 
 ### 第二步：逐工具迁移（按优先级）
 

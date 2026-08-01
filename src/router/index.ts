@@ -7,6 +7,7 @@ import Home from '../views/Home.vue'
 import JNSQuery from '../views/JNSQuery.vue'
 import CoreCheckinStats from '../views/CoreCheckinStats.vue'
 import ToolsHome from '../views/ToolsHome.vue'
+import ContractToolView from '../views/ContractToolView.vue'
 
 const routes = [
   {
@@ -23,6 +24,12 @@ const routes = [
     path: '/tools',
     name: 'toolsHome',
     component: ToolsHome
+  },
+  {
+    path: '/tools/contract/:key',
+    name: 'contractTool',
+    component: ContractToolView,
+    props: true
   },
   {
     path: '/blocks',

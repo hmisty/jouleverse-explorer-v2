@@ -5,147 +5,207 @@
       <p class="tools-subtitle">Jouleverse 生态实用工具 —— 合约交互、空投管理、链上功能</p>
     </div>
 
-    <section v-for="cat in categories" :key="cat.title" class="tools-category">
+    <!-- 核心合约工具 -->
+    <section class="tools-category">
       <h2 class="category-title">
-        <span class="category-icon">{{ cat.icon }}</span>
-        {{ cat.title }}
+        <span class="category-icon">⭐</span>
+        核心合约工具
+        <span class="category-badge">Core</span>
       </h2>
       <div class="tools-grid">
-        <component
-          :is="tool.route ? 'router-link' : tool.link ? 'a' : 'div'"
-          v-for="tool in cat.tools"
-          :key="tool.title"
-          :to="tool.route"
-          :href="tool.link"
-          :target="tool.link ? '_blank' : undefined"
-          :rel="tool.link ? 'noopener' : undefined"
-          :class="['tool-card', { 'is-disabled': !tool.link && !tool.route }]"
+        <router-link
+          v-for="tool in coreContracts"
+          :key="tool.key"
+          :to="`/tools/contract/${tool.key}`"
+          class="tool-card is-core"
         >
           <div class="tool-card-header">
             <h3 class="tool-card-title">
               <span class="tool-icon">{{ tool.icon }}</span>
-              {{ tool.title }}
+              {{ tool.name }}
             </h3>
-            <span :class="['tool-status', `status-${tool.statusType}`]">{{ tool.status }}</span>
+            <span class="tool-status status-migrated">已迁移</span>
           </div>
-          <p class="tool-desc">{{ tool.desc }}</p>
+          <p class="tool-desc">{{ tool.tag }}</p>
           <div class="tool-card-footer">
-            <span v-if="tool.route" class="tool-link">进入 →</span>
-            <span v-else-if="tool.link" class="tool-link">打开工具 ↗</span>
-            <span v-else class="tool-link muted">即将推出</span>
+            <span class="tool-link">打开 →</span>
           </div>
-        </component>
+        </router-link>
+      </div>
+    </section>
+
+    <!-- 生态合约工具 -->
+    <section class="tools-category">
+      <h2 class="category-title">
+        <span class="category-icon">🌿</span>
+        生态合约工具
+        <span class="category-badge">Ecosystem</span>
+      </h2>
+      <div class="tools-grid">
+        <router-link
+          v-for="tool in ecoContracts"
+          :key="tool.key"
+          :to="`/tools/contract/${tool.key}`"
+          class="tool-card"
+        >
+          <div class="tool-card-header">
+            <h3 class="tool-card-title">
+              <span class="tool-icon">{{ tool.icon }}</span>
+              {{ tool.name }}
+            </h3>
+            <span class="tool-status status-migrated">已迁移</span>
+          </div>
+          <p class="tool-desc">{{ tool.tag }}</p>
+          <div class="tool-card-footer">
+            <span class="tool-link">打开 →</span>
+          </div>
+        </router-link>
+      </div>
+    </section>
+
+    <!-- 通用工具 -->
+    <section class="tools-category">
+      <h2 class="category-title">
+        <span class="category-icon">🛠️</span>
+        通用工具
+      </h2>
+      <div class="tools-grid">
+        <a
+          class="tool-card"
+          href="https://jscan.jnsdao.com/tools/contractx/index.html"
+          target="_blank"
+          rel="noopener"
+        >
+          <div class="tool-card-header">
+            <h3 class="tool-card-title">
+              <span class="tool-icon">🔗</span>
+              自定义 ABI 交互
+            </h3>
+            <span class="tool-status status-pending">V1 待迁移</span>
+          </div>
+          <p class="tool-desc">粘贴任意合约 ABI + 地址即可交互，支持 calldata 生成（V1 版本）</p>
+          <div class="tool-card-footer">
+            <span class="tool-link">打开工具 ↗</span>
+          </div>
+        </a>
+
+        <a
+          class="tool-card"
+          href="https://jscan.jnsdao.com/tools/airdrop/merkle-proof-generator.html"
+          target="_blank"
+          rel="noopener"
+        >
+          <div class="tool-card-header">
+            <h3 class="tool-card-title">
+              <span class="tool-icon">🌳</span>
+              默克尔证明生成器
+            </h3>
+            <span class="tool-status status-pending">V1 待迁移</span>
+          </div>
+          <p class="tool-desc">为 Core 空投生成默克尔证明，验证空投资格（V1 版本）</p>
+          <div class="tool-card-footer">
+            <span class="tool-link">打开工具 ↗</span>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <!-- 链上功能 -->
+    <section class="tools-category">
+      <h2 class="category-title">
+        <span class="category-icon">⛓️</span>
+        链上功能
+      </h2>
+      <div class="tools-grid">
+        <router-link to="/jns" class="tool-card">
+          <div class="tool-card-header">
+            <h3 class="tool-card-title">
+              <span class="tool-icon">🌐</span>
+              JNS 域名查询
+            </h3>
+            <span class="tool-status status-migrated">已迁移</span>
+          </div>
+          <p class="tool-desc">JNS 域名信息查询、记录展示与域名操作（绑定/解绑/发送 J）</p>
+          <div class="tool-card-footer">
+            <span class="tool-link">进入 →</span>
+          </div>
+        </router-link>
+
+        <router-link to="/core/checkin" class="tool-card">
+          <div class="tool-card-header">
+            <h3 class="tool-card-title">
+              <span class="tool-icon">📅</span>
+              Core ID 签到统计
+            </h3>
+            <span class="tool-status status-migrated">已迁移</span>
+          </div>
+          <p class="tool-desc">全网 Core ID 按月签到统计，支持月份导航与完整性校验</p>
+          <div class="tool-card-footer">
+            <span class="tool-link">进入 →</span>
+          </div>
+        </router-link>
+      </div>
+    </section>
+
+    <!-- 即将推出 -->
+    <section class="tools-category">
+      <h2 class="category-title">
+        <span class="category-icon">⏳</span>
+        即将推出
+      </h2>
+      <div class="tools-grid">
+        <div class="tool-card is-disabled">
+          <div class="tool-card-header">
+            <h3 class="tool-card-title">
+              <span class="tool-icon">🗳️</span>
+              JNSVote 治理投票
+            </h3>
+            <span class="tool-status status-planned">规划中</span>
+          </div>
+          <p class="tool-desc">JNSVote 治理投票专属界面：资格验证、投票列表、投票操作（P3-1）</p>
+          <div class="tool-card-footer">
+            <span class="tool-link muted">即将推出</span>
+          </div>
+        </div>
+
+        <div class="tool-card is-disabled">
+          <div class="tool-card-header">
+            <h3 class="tool-card-title">
+              <span class="tool-icon">📊</span>
+              数据分析面板
+            </h3>
+            <span class="tool-status status-planned">规划中</span>
+          </div>
+          <p class="tool-desc">Jouleverse 链上数据可视化：交易量、地址增长、合约活动等关键指标</p>
+          <div class="tool-card-footer">
+            <span class="tool-link muted">即将推出</span>
+          </div>
+        </div>
+
+        <div class="tool-card is-disabled">
+          <div class="tool-card-header">
+            <h3 class="tool-card-title">
+              <span class="tool-icon">🔐</span>
+              多签钱包管理
+            </h3>
+            <span class="tool-status status-planned">规划中</span>
+          </div>
+          <p class="tool-desc">多签钱包创建、管理与交易签名专属界面</p>
+          <div class="tool-card-footer">
+            <span class="tool-link muted">即将推出</span>
+          </div>
+        </div>
       </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-interface ToolItem {
-  title: string
-  icon: string
-  desc: string
-  /** V2 内页路由 */
-  route?: string
-  /** V1 外链地址 */
-  link?: string
-  status: string
-  statusType: 'migrated' | 'pending' | 'planned'
-}
+import { computed } from 'vue'
+import { toolboxContracts } from '../contracts/toolbox'
 
-interface ToolCategory {
-  title: string
-  icon: string
-  tools: ToolItem[]
-}
-
-const categories: ToolCategory[] = [
-  {
-    title: '合约工具',
-    icon: '🧊',
-    tools: [
-      {
-        title: '核心合约交互工具集',
-        icon: '⚙️',
-        desc: '与 Jouleverse 核心合约交互：合约部署、函数调用、事件查询（V1 版本，待迁移至 V2）',
-        link: 'https://jscan.jnsdao.com/tools/core/index.html',
-        status: 'V1 待迁移',
-        statusType: 'pending',
-      },
-      {
-        title: '其他合约交互工具集',
-        icon: '🔗',
-        desc: '与 Jouleverse 生态其他智能合约交互，支持自定义 ABI（V1 版本，待迁移至 V2）',
-        link: 'https://jscan.jnsdao.com/tools/contractx/index.html',
-        status: 'V1 待迁移',
-        statusType: 'pending',
-      },
-    ],
-  },
-  {
-    title: '空投管理工具',
-    icon: '🎁',
-    tools: [
-      {
-        title: '默克尔证明生成器',
-        icon: '🌳',
-        desc: '为 Core 空投生成默克尔证明，验证空投资格并生成链上可验证的证明文件（V1 版本，待迁移）',
-        link: 'https://jscan.jnsdao.com/tools/airdrop/merkle-proof-generator.html',
-        status: 'V1 待迁移',
-        statusType: 'pending',
-      },
-    ],
-  },
-  {
-    title: '链上功能',
-    icon: '⛓️',
-    tools: [
-      {
-        title: 'JNS 域名查询',
-        icon: '🌐',
-        desc: 'JNS 域名信息查询、记录展示与域名操作（绑定/解绑/发送 J）',
-        route: '/jns',
-        status: '已迁移',
-        statusType: 'migrated',
-      },
-      {
-        title: 'Core ID 签到统计',
-        icon: '📅',
-        desc: '全网 Core ID 按月签到统计，支持月份导航与完整性校验',
-        route: '/core/checkin',
-        status: '已迁移',
-        statusType: 'migrated',
-      },
-    ],
-  },
-  {
-    title: '即将推出',
-    icon: '⏳',
-    tools: [
-      {
-        title: 'JNSVote 治理投票',
-        icon: '🗳️',
-        desc: 'JNSVote 治理投票模块：资格验证、投票列表、投票操作（规划中，P3-1）',
-        status: '规划中',
-        statusType: 'planned',
-      },
-      {
-        title: '数据分析面板',
-        icon: '📊',
-        desc: 'Jouleverse 链上数据可视化：交易量、地址增长、合约活动等关键指标',
-        status: '规划中',
-        statusType: 'planned',
-      },
-      {
-        title: '多签钱包管理',
-        icon: '🔐',
-        desc: '多签钱包创建、管理与交易签名工具',
-        status: '规划中',
-        statusType: 'planned',
-      },
-    ],
-  },
-]
+const coreContracts = computed(() => toolboxContracts.filter((c) => c.category === 'core'))
+const ecoContracts = computed(() => toolboxContracts.filter((c) => c.category === 'eco'))
 </script>
 
 <style scoped>
@@ -192,6 +252,16 @@ const categories: ToolCategory[] = [
   font-size: 1.1rem;
 }
 
+.category-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: var(--jv-radius-full);
+  background: var(--jv-brand-subtle);
+  color: var(--jv-brand);
+  letter-spacing: 0.5px;
+}
+
 .tools-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -216,6 +286,10 @@ a.tool-card:hover {
   border-color: var(--jv-brand);
   box-shadow: var(--jv-shadow-md);
   transform: translateY(-2px);
+}
+
+.tool-card.is-core {
+  border-left: 3px solid var(--jv-brand);
 }
 
 .tool-card.is-disabled {

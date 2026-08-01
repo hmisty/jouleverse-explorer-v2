@@ -43,6 +43,7 @@
         </div>
         <div class="search-hints">
           快速链接：<router-link to="/jns" class="quick-link">JNS 域名查询</router-link>
+          <router-link to="/tools" class="quick-link">工具集</router-link>
         </div>
       </div>
 

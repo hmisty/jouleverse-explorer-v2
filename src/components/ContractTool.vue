@@ -84,10 +84,10 @@
             <JvHashText :value="txHash" :truncate="0" :type="'tx'" />
             <a
               class="ct-tx-link"
-              :href="`https://jscan.jnsdao.com/tx/${txHash}`"
+              :href="`/#/tx/${txHash}`"
               target="_blank"
               rel="noopener"
-            >在 JScan 查看 ↗</a>
+            >查看交易详情 ↗</a>
           </div>
         </template>
       </div>

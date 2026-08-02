@@ -5,6 +5,20 @@
     <link rel="icon" type="image/svg+xml" href="/jv.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>explorer-v2</title>
+    <script>
+      // SPA 兼容：/tx/xxx → /#/tx/xxx（hash 路由）
+      // 旧链接或外部直接访问路径时，自动重定向到站内 hash 路由
+      ;(function () {
+        var path = window.location.pathname
+        var hash = window.location.hash
+        // 仅对无 hash 的路径处理，且排除静态资源
+        if (hash || path === '/' || path === '') return
+        var m = path.match(/^\/(tx|block|address)\/([^/]+)/)
+        if (m) {
+          window.location.replace('/#' + path)
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

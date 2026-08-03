@@ -116,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onUnmounted } from 'vue'
+import { computed, ref } from 'vue'
 import { getPublicClient } from '@wagmi/core'
 import { writeContract, waitForTransactionReceipt } from 'wagmi/actions'
 import { WaitForTransactionReceiptTimeoutError } from 'viem'
@@ -158,7 +158,9 @@ const loading = ref(false)
 const txHash = ref<string>('')
 const txStatus = ref<'pending' | 'success' | 'reverted' | ''>('')
 const receipt = ref<TransactionReceipt | null>(null)
-let pollTimer: ReturnType<typeof setInterval> | null = null
+
+// 交易确认等待超时（区块间隔约 15s，120s 覆盖约 8 个块）
+const TX_CONFIRM_TIMEOUT_MS = 120_000
 
 function selectFunction(fn: AbiFunction) {
   selectedFn.value = fn
@@ -167,14 +169,6 @@ function selectFunction(fn: AbiFunction) {
   txHash.value = ''
   txStatus.value = ''
   receipt.value = null
-  stopPolling()
-}
-
-function stopPolling() {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
 }
 
 // 解码 revert data：Error(string) 与 Panic(uint256)
@@ -225,46 +219,25 @@ async function fetchRevertReason(hash: `0x${string}`, blockNumber: bigint): Prom
   }
 }
 
+// 链上已返回 receipt（无论成功或失败）→ 链上的确定结果，如实展示
+// - success：交易成功
+// - reverted：上链失败，展示链返回的错误详情
 async function applyReceipt(rcpt: TransactionReceipt, notice = '') {
   receipt.value = rcpt
   txStatus.value = rcpt.status === 'success' ? 'success' : 'reverted'
+  const prefix = notice ? notice + '\n' : ''
   if (rcpt.status === 'success') {
-    result.value = notice ? `${notice}\n✅ 交易已确认` : '✅ 交易已确认'
+    result.value = `${prefix}✅ 交易已确认`
   } else {
-    result.value = notice ? `${notice}\n❌ 合约调用失败` : '❌ 合约调用失败'
+    result.value = `${prefix}❌ 上链失败（交易已回滚）`
     try {
       const reason = await fetchRevertReason(rcpt.transactionHash, rcpt.blockNumber)
-      if (reason) result.value = `${notice ? notice + '\n' : ''}❌ 合约调用失败：${reason}`
+      if (reason) result.value = `${prefix}❌ 上链失败，错误信息是：${reason}`
     } catch {
       // 拿不到 revert 原因时保持通用提示
     }
   }
 }
-
-// 超时后的后台轮询：mempool 拥堵时交易可能排队，持续监听直到进块
-// 连续 12 次（约 60s）请求失败则如实提示网络异常
-function pollReceipt(hash: `0x${string}`) {
-  stopPolling()
-  let failCount = 0
-  pollTimer = setInterval(async () => {
-    try {
-      const rcpt = await publicClient.getTransactionReceipt({ hash })
-      if (rcpt) {
-        stopPolling()
-        applyReceipt(rcpt)
-      }
-      failCount = 0
-    } catch {
-      failCount++
-      if (failCount >= 12) {
-        stopPolling()
-        result.value = '⚠️ 网络异常，暂时无法获取交易状态，可点击下方链接查看最新情况'
-      }
-    }
-  }, 5000)
-}
-
-onUnmounted(() => stopPolling())
 
 function placeholderFor(type: string): string {
   if (type.startsWith('uint') || type.startsWith('int')) return '0 或 1000000000000000000'
@@ -355,11 +328,11 @@ async function execute() {
       txHash.value = hash
       txStatus.value = 'pending'
       try {
-        // 监听交易确认：仅 120s 超时视为"排队中"，其余错误（替换/网络等）如实展示
+        // 链上能返回 receipt（无论成功/失败）即说明交易已上链，属于链上结果，如实展示
         let replacedNotice = ''
         const rcpt = await waitForTransactionReceipt(config, {
           hash,
-          timeout: 120_000,
+          timeout: TX_CONFIRM_TIMEOUT_MS,
           onReplaced: (r) => {
             const reasonMap = { cancelled: '已取消', replaced: '已被替换', repriced: '已加速替换' } as const
             replacedNotice = `⚠️ 原交易${reasonMap[r.reason] || '被替换'}，新交易 ${r.transaction.hash.slice(0, 10)}...`
@@ -368,13 +341,14 @@ async function execute() {
         applyReceipt(rcpt, replacedNotice)
       } catch (e: unknown) {
         if (e instanceof WaitForTransactionReceiptTimeoutError) {
-          // 仅真正超时才提示排队中，并转后台持续监听
-          result.value = `⏳ 交易已提交（${hash.slice(0, 10)}...），链上排队中，进块后自动更新状态...`
-          pollReceipt(hash)
+          // 仅真正超时才提示超时，不自动轮询，请用户稍后手工刷新查看
+          result.value = `⚠️ ${TX_CONFIRM_TIMEOUT_MS / 1000}秒内交易未确认，请稍后手工刷新页面查看最新状态`
+          txStatus.value = ''
         } else {
-          // 其他错误（网络中断、RPC 异常等）诚实展示
+          // 其他错误（网络中断、RPC 异常等）如实说明错误类型与详情
+          const name = e instanceof Error ? e.name : '未知错误'
           const msg = e instanceof Error ? e.message : String(e)
-          result.value = `❌ 等待确认失败：${msg}`
+          result.value = `❌ ${name}：${msg}`
           txStatus.value = ''
         }
       }

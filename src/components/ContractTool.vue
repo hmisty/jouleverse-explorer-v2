@@ -116,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onUnmounted } from 'vue'
 import { getPublicClient } from '@wagmi/core'
 import { writeContract, waitForTransactionReceipt } from 'wagmi/actions'
 import type { TransactionReceipt } from 'viem'
@@ -157,6 +157,7 @@ const loading = ref(false)
 const txHash = ref<string>('')
 const txStatus = ref<'pending' | 'success' | 'reverted' | ''>('')
 const receipt = ref<TransactionReceipt | null>(null)
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 function selectFunction(fn: AbiFunction) {
   selectedFn.value = fn
@@ -165,7 +166,39 @@ function selectFunction(fn: AbiFunction) {
   txHash.value = ''
   txStatus.value = ''
   receipt.value = null
+  stopPolling()
 }
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+function applyReceipt(rcpt: TransactionReceipt) {
+  receipt.value = rcpt
+  txStatus.value = rcpt.status === 'success' ? 'success' : 'reverted'
+  result.value = rcpt.status === 'success' ? '✅ 交易已确认' : '❌ 交易失败（reverted）'
+}
+
+// 超时后的后台轮询：mempool 拥堵时交易可能排队几分钟，持续监听直到进块
+function pollReceipt(hash: `0x${string}`) {
+  stopPolling()
+  pollTimer = setInterval(async () => {
+    try {
+      const rcpt = await publicClient.getTransactionReceipt({ hash })
+      if (rcpt) {
+        stopPolling()
+        applyReceipt(rcpt)
+      }
+    } catch {
+      // 尚未打包，继续等待
+    }
+  }, 5000)
+}
+
+onUnmounted(() => stopPolling())
 
 function placeholderFor(type: string): string {
   if (type.startsWith('uint') || type.startsWith('int')) return '0 或 1000000000000000000'
@@ -257,13 +290,11 @@ async function execute() {
       txStatus.value = 'pending'
       try {
         const rcpt = await waitForTransactionReceipt(config, { hash, timeout: 120_000 })
-        receipt.value = rcpt
-        txStatus.value = rcpt.status === 'success' ? 'success' : 'reverted'
-        result.value = rcpt.status === 'success' ? '✅ 交易已确认' : '❌ 交易失败（reverted）'
+        applyReceipt(rcpt)
       } catch {
-        // 等待确认超时/网络中断：交易已上链，仅提示用户自行查看
-        txStatus.value = ''
-        result.value = `⚠️ 交易已提交（${hash.slice(0, 10)}...），等待确认超时，可点击下方链接查看最新状态`
+        // 120s 超时：交易可能仍在 mempool 排队（J 链拥堵时常见），转后台持续监听
+        result.value = `⏳ 交易已提交（${hash.slice(0, 10)}...），链上排队中，进块后自动更新状态...`
+        pollReceipt(hash)
       }
     }
   } catch (e: unknown) {

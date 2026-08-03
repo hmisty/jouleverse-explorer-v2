@@ -176,10 +176,68 @@ function stopPolling() {
   }
 }
 
-function applyReceipt(rcpt: TransactionReceipt) {
+// 解码 revert data：Error(string) 与 Panic(uint256)
+function decodeRevertReason(data: string): string {
+  try {
+    if (data.startsWith('0x08c379a0')) {
+      // Error(string) — require/revert 带消息
+      const body = data.slice(10)
+      const offset = parseInt(body.slice(0, 64), 16) * 2
+      const len = parseInt(body.slice(offset + 64, offset + 128), 16)
+      const content = body.slice(offset + 128, offset + 128 + len * 2)
+      return Buffer.from(content, 'hex').toString('utf8')
+    }
+    if (data.startsWith('0x4e487b71')) {
+      // Panic(uint256) — 编译器内建错误
+      const code = BigInt('0x' + data.slice(10, 74))
+      const panicMap: Record<string, string> = {
+        '1': 'assert 失败', '17': '算术溢出', '18': '除以零', '33': '枚举值越界',
+        '34': '存储字节数组越界', '49': 'pop 空数组', '50': '数组越界', '65': '分配内存溢出', '81': '内部函数调用错误',
+      }
+      return `Panic(${code}): ${panicMap[code.toString()] || '未知错误'}`
+    }
+    return `revert data: ${data.slice(0, 18)}...`
+  } catch {
+    return ''
+  }
+}
+
+// 通过 eth_call 重放交易获取合约 revert 原因
+async function fetchRevertReason(hash: `0x${string}`, blockNumber: bigint): Promise<string | null> {
+  try {
+    const tx = await publicClient.getTransaction({ hash })
+    // 在交易执行时的区块状态上重放调用，捕获 revert data
+    const blockTag = `0x${(blockNumber - 1n).toString(16)}`
+    await publicClient.request({
+      method: 'eth_call',
+      params: [{ from: tx.from, to: tx.to, data: tx.input, value: tx.value }, blockTag],
+    } as never)
+    return null // 重放成功说明当前状态已不 revert（状态已变），无原因可展示
+  } catch (e: unknown) {
+    const err = e as { data?: string; cause?: { data?: string; cause?: { data?: string } } }
+    const data = err.data || err.cause?.data || err.cause?.cause?.data
+    if (data && data !== '0x') {
+      const reason = decodeRevertReason(data)
+      if (reason) return reason
+    }
+    return null
+  }
+}
+
+async function applyReceipt(rcpt: TransactionReceipt) {
   receipt.value = rcpt
   txStatus.value = rcpt.status === 'success' ? 'success' : 'reverted'
-  result.value = rcpt.status === 'success' ? '✅ 交易已确认' : '❌ 交易失败（reverted）'
+  if (rcpt.status === 'success') {
+    result.value = '✅ 交易已确认'
+  } else {
+    result.value = '❌ 合约调用失败'
+    try {
+      const reason = await fetchRevertReason(rcpt.transactionHash, rcpt.blockNumber)
+      if (reason) result.value = `❌ 合约调用失败：${reason}`
+    } catch {
+      // 拿不到 revert 原因时保持通用提示
+    }
+  }
 }
 
 // 超时后的后台轮询：mempool 拥堵时交易可能排队几分钟，持续监听直到进块

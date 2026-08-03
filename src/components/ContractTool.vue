@@ -80,8 +80,28 @@
           </div>
 
           <div v-if="txHash" class="ct-tx">
-            <h4>交易已发送</h4>
+            <h4>交易</h4>
             <JvHashText :value="txHash" :truncate="0" :type="'tx'" />
+
+            <div v-if="txStatus === 'pending'" class="ct-tx-badge pending">
+              <span class="spinner"></span> 已提交，等待链上确认...
+            </div>
+            <div v-else-if="txStatus === 'success'" class="ct-tx-badge success">✅ 交易成功</div>
+            <div v-else-if="txStatus === 'reverted'" class="ct-tx-badge reverted">❌ 交易失败（reverted）</div>
+
+            <div v-if="receipt" class="ct-receipt">
+              <div class="ct-receipt-row">
+                <span>状态</span>
+                <b :class="receipt.status === 'success' ? 'text-success' : 'text-error'">
+                  {{ receipt.status === 'success' ? '成功' : '失败' }}
+                </b>
+              </div>
+              <div class="ct-receipt-row"><span>区块高度</span><b>#{{ receipt.blockNumber.toString() }}</b></div>
+              <div class="ct-receipt-row"><span>Gas 消耗</span><b>{{ receipt.gasUsed.toString() }}</b></div>
+              <div class="ct-receipt-row"><span>Gas 价格</span><b>{{ formatGasPrice(receipt.effectiveGasPrice) }}</b></div>
+              <div class="ct-receipt-row"><span>事件日志</span><b>{{ receipt.logs.length }} 条</b></div>
+            </div>
+
             <a
               class="ct-tx-link"
               :href="`/#/tx/${txHash}`"
@@ -98,7 +118,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { getPublicClient } from '@wagmi/core'
-import { writeContract } from 'wagmi/actions'
+import { writeContract, waitForTransactionReceipt } from 'wagmi/actions'
+import type { TransactionReceipt } from 'viem'
 import { config, useWalletStore } from '../stores/wallet'
 import JvHashText from '../design-system/components/JvHashText.vue'
 import JvActionButton from '../design-system/components/JvActionButton.vue'
@@ -134,12 +155,16 @@ const argValues = ref<(string | boolean)[]>([])
 const result = ref<string | null>(null)
 const loading = ref(false)
 const txHash = ref<string>('')
+const txStatus = ref<'pending' | 'success' | 'reverted' | ''>('')
+const receipt = ref<TransactionReceipt | null>(null)
 
 function selectFunction(fn: AbiFunction) {
   selectedFn.value = fn
   argValues.value = fn.inputs.map((input) => (input.type === 'bool' ? false : ''))
   result.value = null
   txHash.value = ''
+  txStatus.value = ''
+  receipt.value = null
 }
 
 function placeholderFor(type: string): string {
@@ -172,6 +197,12 @@ function parseArg(raw: string | boolean, type: string): unknown {
   return raw
 }
 
+function formatGasPrice(price: bigint | undefined): string {
+  if (price === undefined) return '-'
+  const gwei = Number(price) / 1e9
+  return `${gwei.toFixed(2)} Gwei`
+}
+
 function formatResult(data: unknown): string {
   const fmt = (v: unknown): unknown => {
     if (typeof v === 'bigint') return v.toString()
@@ -196,6 +227,8 @@ async function execute() {
   loading.value = true
   result.value = null
   txHash.value = ''
+  txStatus.value = ''
+  receipt.value = null
   try {
     const args = fn.inputs.map((_, i) => parseArg(argValues.value[i], fn.inputs[i].type))
     if (fn.stateMutability === 'view' || fn.stateMutability === 'pure') {
@@ -221,7 +254,17 @@ async function execute() {
         args: args as never,
       })
       txHash.value = hash
-      result.value = '✅ 交易已提交'
+      txStatus.value = 'pending'
+      try {
+        const rcpt = await waitForTransactionReceipt(config, { hash, timeout: 120_000 })
+        receipt.value = rcpt
+        txStatus.value = rcpt.status === 'success' ? 'success' : 'reverted'
+        result.value = rcpt.status === 'success' ? '✅ 交易已确认' : '❌ 交易失败（reverted）'
+      } catch {
+        // 等待确认超时/网络中断：交易已上链，仅提示用户自行查看
+        txStatus.value = ''
+        result.value = `⚠️ 交易已提交（${hash.slice(0, 10)}...），等待确认超时，可点击下方链接查看最新状态`
+      }
     }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -466,6 +509,53 @@ async function execute() {
   border-top: 1px solid var(--jv-border);
   padding-top: 14px;
 }
+
+.ct-tx-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 6px 14px;
+  border-radius: var(--jv-radius-full);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.ct-tx-badge.pending { background: var(--jv-warning-bg); color: var(--jv-warning); }
+.ct-tx-badge.success { background: var(--jv-success-bg); color: var(--jv-success); }
+.ct-tx-badge.reverted { background: var(--jv-error-bg); color: var(--jv-error); }
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ct-spin 0.8s linear infinite;
+}
+
+@keyframes ct-spin { to { transform: rotate(360deg); } }
+
+.ct-receipt {
+  margin-top: 12px;
+  border: 1px solid var(--jv-border);
+  border-radius: var(--jv-radius-md);
+  overflow: hidden;
+}
+
+.ct-receipt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-family: var(--jv-font-mono);
+}
+
+.ct-receipt-row:nth-child(odd) { background: var(--jv-bg-subtle); }
+.ct-receipt-row span { color: var(--jv-text-muted); }
+.text-success { color: var(--jv-success); }
+.text-error { color: var(--jv-error); }
 
 .ct-tx-link {
   display: inline-block;

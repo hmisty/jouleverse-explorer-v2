@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { createConfig, http } from 'wagmi'
 import { metaMask } from 'wagmi/connectors'
-import { getPublicClient } from '@wagmi/core'
+import { getPublicClient, reconnect } from '@wagmi/core'
 
 // Jouleverse chain config
 const jouleverse = {
@@ -60,6 +60,50 @@ export const useWalletStore = defineStore('wallet', () => {
       console.error('Failed to check connection:', error)
       isConnected.value = false
       address.value = null
+    }
+  }
+
+  // 等待钱包 provider 注入就绪（刷新页面后 MetaMask 扩展注入有延迟）
+  // 最长等待 5s，轮询检查 window.ethereum
+  const waitForProvider = (timeoutMs = 5000): Promise<boolean> =>
+    new Promise((resolve) => {
+      const win = window as unknown as { ethereum?: unknown }
+      const start = Date.now()
+      const timer = setInterval(() => {
+        if (win.ethereum) {
+          clearInterval(timer)
+          resolve(true)
+        } else if (Date.now() - start > timeoutMs) {
+          clearInterval(timer)
+          resolve(false)
+        }
+      }, 200)
+    })
+
+  // 恢复已连接状态（页面刷新后调用）：
+  // 1. 等待 provider 就绪（避免扩展注入延迟导致误判未连接）
+  // 2. 用 wagmi 官方 reconnect 静默恢复已授权连接（不弹窗）
+  // 3. 兜底走 checkConnection
+  const restoreConnection = async () => {
+    try {
+      const ready = await waitForProvider()
+      if (!ready) {
+        // 5s 内 provider 未就绪（如未安装钱包扩展），保持未连接状态
+        return
+      }
+      const result = await reconnect(config)
+      const conn = result[0]
+      if (conn) {
+        address.value = conn.accounts[0]
+        isConnected.value = true
+        await getBalance()
+        await getWJBalance()
+      } else {
+        await checkConnection()
+      }
+    } catch (error) {
+      console.error('Failed to restore connection:', error)
+      await checkConnection()
     }
   }
 
@@ -187,6 +231,7 @@ export const useWalletStore = defineStore('wallet', () => {
     getWJBalance,
     refreshBalances,
     checkConnection,
+    restoreConnection,
     formatAddress,
     formatBalance,
   }

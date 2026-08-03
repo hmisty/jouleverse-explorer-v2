@@ -26,7 +26,8 @@ const handleDisconnect = async () => {
 }
 
 onMounted(() => {
-  walletStore.checkConnection()
+  // 恢复已连接状态：等待钱包 provider 就绪 + reconnect 静默恢复（不弹窗）
+  walletStore.restoreConnection()
 })
 </script>
 

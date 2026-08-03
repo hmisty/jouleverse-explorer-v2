@@ -119,6 +119,7 @@
 import { computed, ref, onUnmounted } from 'vue'
 import { getPublicClient } from '@wagmi/core'
 import { writeContract, waitForTransactionReceipt } from 'wagmi/actions'
+import { WaitForTransactionReceiptTimeoutError } from 'viem'
 import type { TransactionReceipt } from 'viem'
 import { config, useWalletStore } from '../stores/wallet'
 import JvHashText from '../design-system/components/JvHashText.vue'
@@ -224,25 +225,27 @@ async function fetchRevertReason(hash: `0x${string}`, blockNumber: bigint): Prom
   }
 }
 
-async function applyReceipt(rcpt: TransactionReceipt) {
+async function applyReceipt(rcpt: TransactionReceipt, notice = '') {
   receipt.value = rcpt
   txStatus.value = rcpt.status === 'success' ? 'success' : 'reverted'
   if (rcpt.status === 'success') {
-    result.value = '✅ 交易已确认'
+    result.value = notice ? `${notice}\n✅ 交易已确认` : '✅ 交易已确认'
   } else {
-    result.value = '❌ 合约调用失败'
+    result.value = notice ? `${notice}\n❌ 合约调用失败` : '❌ 合约调用失败'
     try {
       const reason = await fetchRevertReason(rcpt.transactionHash, rcpt.blockNumber)
-      if (reason) result.value = `❌ 合约调用失败：${reason}`
+      if (reason) result.value = `${notice ? notice + '\n' : ''}❌ 合约调用失败：${reason}`
     } catch {
       // 拿不到 revert 原因时保持通用提示
     }
   }
 }
 
-// 超时后的后台轮询：mempool 拥堵时交易可能排队几分钟，持续监听直到进块
+// 超时后的后台轮询：mempool 拥堵时交易可能排队，持续监听直到进块
+// 连续 12 次（约 60s）请求失败则如实提示网络异常
 function pollReceipt(hash: `0x${string}`) {
   stopPolling()
+  let failCount = 0
   pollTimer = setInterval(async () => {
     try {
       const rcpt = await publicClient.getTransactionReceipt({ hash })
@@ -250,8 +253,13 @@ function pollReceipt(hash: `0x${string}`) {
         stopPolling()
         applyReceipt(rcpt)
       }
+      failCount = 0
     } catch {
-      // 尚未打包，继续等待
+      failCount++
+      if (failCount >= 12) {
+        stopPolling()
+        result.value = '⚠️ 网络异常，暂时无法获取交易状态，可点击下方链接查看最新情况'
+      }
     }
   }, 5000)
 }
@@ -347,12 +355,28 @@ async function execute() {
       txHash.value = hash
       txStatus.value = 'pending'
       try {
-        const rcpt = await waitForTransactionReceipt(config, { hash, timeout: 120_000 })
-        applyReceipt(rcpt)
-      } catch {
-        // 120s 超时：交易可能仍在 mempool 排队（J 链拥堵时常见），转后台持续监听
-        result.value = `⏳ 交易已提交（${hash.slice(0, 10)}...），链上排队中，进块后自动更新状态...`
-        pollReceipt(hash)
+        // 监听交易确认：仅 120s 超时视为"排队中"，其余错误（替换/网络等）如实展示
+        let replacedNotice = ''
+        const rcpt = await waitForTransactionReceipt(config, {
+          hash,
+          timeout: 120_000,
+          onReplaced: (r) => {
+            const reasonMap = { cancelled: '已取消', replaced: '已被替换', repriced: '已加速替换' } as const
+            replacedNotice = `⚠️ 原交易${reasonMap[r.reason] || '被替换'}，新交易 ${r.transaction.hash.slice(0, 10)}...`
+          },
+        })
+        applyReceipt(rcpt, replacedNotice)
+      } catch (e: unknown) {
+        if (e instanceof WaitForTransactionReceiptTimeoutError) {
+          // 仅真正超时才提示排队中，并转后台持续监听
+          result.value = `⏳ 交易已提交（${hash.slice(0, 10)}...），链上排队中，进块后自动更新状态...`
+          pollReceipt(hash)
+        } else {
+          // 其他错误（网络中断、RPC 异常等）诚实展示
+          const msg = e instanceof Error ? e.message : String(e)
+          result.value = `❌ 等待确认失败：${msg}`
+          txStatus.value = ''
+        }
       }
     }
   } catch (e: unknown) {

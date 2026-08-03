@@ -126,10 +126,12 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { isAddress, formatUnits } from 'viem'
+import type { Block as ViemBlock } from 'viem'
+import { watchBlocks } from 'viem/actions'
 import { formatAge, formatNumber } from '../utils/format'
 import { timelockABI, TIMELOCK_CORE_ADDRESS, TIMELOCK_ECO_ADDRESS } from '../contracts/timelock'
 import type { TimelockData } from '../contracts/timelock'
-import { publicClient } from '../config/client'
+import { publicClient, wsPublicClient } from '../config/client'
 import { detectAddressFormat } from '../utils/jvaddress'
 import { JvLoading, JvPageState, JvHashText } from '../design-system'
 
@@ -152,8 +154,7 @@ const searchQuery = ref('')
 const networkUptime = ref('')
 const wsConnected = ref(false)
 
-let ws: WebSocket | null = null
-let wsSubscriptionId: string | null = null
+let unwatchBlocks: (() => void) | null = null
 
 const timelockCore = ref<TimelockData | null>(null)
 const timelockEco = ref<TimelockData | null>(null)
@@ -249,46 +250,46 @@ const fetchLatestBlocks = async () => {
   finally { loading.value = false }
 }
 
-const connectWebSocket = () => {
-  try {
-    ws = new WebSocket('wss://rpc.jnsdao.com:8505')
-    ws.onopen = () => {
-      wsConnected.value = true
-      ws?.send(JSON.stringify({ jsonrpc: '2.0', method: 'eth_subscribe', params: ['newHeads'], id: 1 }))
-    }
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data)
-        if (msg.result && !wsSubscriptionId) wsSubscriptionId = msg.result
-        if (msg.method === 'eth_subscription' && msg.params?.result) handleNewBlock(msg.params.result)
-      } catch { }
-    }
-    ws.onerror = () => { wsConnected.value = false }
-    ws.onclose = () => {
+// viem watchBlocks：WS transport 下自动使用 eth_subscribe('newHeads') 推送
+// - 断线自动重连（viem transport 层内置，指数退避）
+// - emitOnBegin：连接建立后立即推送一次当前最新块（作为初始帧，不标"新"）
+// - 用块号递增判断真实新区块，避免 viem prevBlock 在首帧为 undefined 导致漏标
+let lastBlockNumber = 0n
+const setupBlockWatch = () => {
+  unwatchBlocks = watchBlocks(wsPublicClient, {
+    emitOnBegin: true,
+    onBlock: (block) => {
+      const isNew = lastBlockNumber !== 0n && block.number > lastBlockNumber
+      lastBlockNumber = block.number
+      handleNewBlock(block, isNew)
+    },
+    onError: (err) => {
       wsConnected.value = false
-      wsSubscriptionId = null
-      setTimeout(() => { if (!ws || ws.readyState === WebSocket.CLOSED) connectWebSocket() }, 5000)
-    }
-  } catch { wsConnected.value = false }
+      console.error('[Home] 区块推送订阅错误:', err)
+    },
+  })
 }
 
-const handleNewBlock = (blockData: any) => {
+const handleNewBlock = (b: ViemBlock, markNew: boolean) => {
   const newBlock: Block = {
-    number: parseInt(blockData.number, 16),
-    hash: blockData.hash,
-    timestamp: parseInt(blockData.timestamp, 16),
-    transactions: blockData.transactions || [],
-    gasUsed: BigInt(blockData.gasUsed || 0),
-    isNew: true,
+    number: Number(b.number),
+    hash: b.hash || '',
+    timestamp: Number(b.timestamp),
+    transactions: (b.transactions as string[]) || [],
+    gasUsed: b.gasUsed,
+    isNew: markNew,
   }
   latestBlock.value = newBlock
   networkStatus.value = 'online'
-  blocks.value.unshift(newBlock)
-  if (blocks.value.length > 10) blocks.value = blocks.value.slice(0, 10)
-  setTimeout(() => {
-    const b = blocks.value.find(b => b.hash === newBlock.hash)
-    if (b) b.isNew = false
-  }, 3000)
+  wsConnected.value = true
+  // 按 hash 去重后插入头部，避免与初始 HTTP 加载重复
+  blocks.value = [newBlock, ...blocks.value.filter(x => x.hash !== newBlock.hash)].slice(0, 10)
+  if (markNew) {
+    setTimeout(() => {
+      const blk = blocks.value.find(x => x.hash === newBlock.hash)
+      if (blk) blk.isNew = false
+    }, 3000)
+  }
 }
 
 const handleSearch = () => {
@@ -301,8 +302,8 @@ const handleSearch = () => {
   router.push(`/block/${q}`)
 }
 
-onMounted(() => { fetchLatestBlocks(); fetchAllTimelockData(); connectWebSocket() })
-onUnmounted(() => { if (ws) ws.close() })
+onMounted(() => { fetchLatestBlocks(); fetchAllTimelockData(); setupBlockWatch() })
+onUnmounted(() => { unwatchBlocks?.() })
 </script>
 
 <style scoped>

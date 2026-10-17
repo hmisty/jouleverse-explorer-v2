@@ -46,23 +46,19 @@
             <span class="label">JNS 域名</span>
             <span class="value jns-name">{{ jnsName }}.j</span>
           </div>
-          <div class="info-item">
-            <span class="label">能量余额</span>
-            <JvAmount v-if="!loadingBalance && balance !== null" :value="balance" unit="J" />
-            <span v-else class="value muted">{{ loadingBalance ? '加载中...' : '—' }}</span>
-          </div>
         </div>
+      </div>
+
+      <!-- 资产（配置驱动统一视图：J / WJ / NFT 余额 + JNS 明细） -->
+      <div class="panel">
+        <h2>💼 资产</h2>
+        <CoreAssetsPanel :address="hexAddress" @wj-balance="wjBalance = $event" />
       </div>
 
       <!-- WJ 信息 -->
       <div class="panel">
         <h2>💰 Wrapped Joule (wJ)</h2>
         <div class="info-grid">
-          <div class="info-item">
-            <span class="label">wJ 余额</span>
-            <JvAmount v-if="!loadingWJ && wjBalance !== null" :value="wjBalance" unit="wJ" />
-            <span v-else class="value muted">{{ loadingWJ ? '加载中...' : '—' }}</span>
-          </div>
           <div class="info-item">
             <span class="label">合约地址</span>
             <JvHashText :value="WJ_ADDRESS" type="address" :truncate="8" />
@@ -78,28 +74,6 @@
       <div class="panel">
         <h2>🆔 Core ID 与签到</h2>
         <CoreIdSection :address="hexAddress" :formatAddress="formatAddress" />
-      </div>
-
-      <!-- JNS 持有 -->
-      <div v-if="jnsTotal > 0 || loadingJnsHoldings" class="panel">
-        <h2>🏷️ JNS 域名持有</h2>
-        <JvLoading v-if="loadingJnsHoldings && jnsNames.length === 0" label="加载中..." />
-        <div v-else>
-          <p class="jns-summary">
-            共持有 <strong>{{ jnsTotal }}</strong> 个 JNS 域名{{ jnsTotal > JNS_MAX_DISPLAY ? `，仅显示前 ${JNS_MAX_DISPLAY} 个` : '' }}
-          </p>
-          <div class="jns-list">
-            <span v-for="name in jnsNames" :key="name" class="jns-tag" @click="goJnsDetail(name)">{{ name }}.j</span>
-          </div>
-          <div v-if="jnsLoaded < Math.min(jnsTotal, JNS_MAX_DISPLAY)" class="jns-more">
-            <button class="btn-load-more" :disabled="loadingJnsHoldings" @click="loadMoreJns">
-              {{ loadingJnsHoldings ? '加载中...' : `加载更多（已显示 ${jnsLoaded} / ${Math.min(jnsTotal, JNS_MAX_DISPLAY)}）` }}
-            </button>
-          </div>
-          <p v-if="jnsTotal > JNS_MAX_DISPLAY" class="jns-overflow-hint">
-            前往 <a @click.prevent="$router.push('/jns')" href="#">JNS 查询页</a> 可查看全部域名
-          </p>
-        </div>
       </div>
 
       <!-- 代币转账记录 -->
@@ -167,14 +141,14 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { formatEther } from 'viem'
 import { formatAddress } from '../utils/format'
-import { fetchJnsHoldingBatch } from '../utils/jns-holdings'
-import { WJ_ADDRESS, wjABI } from '../contracts/wj'
+import { WJ_ADDRESS } from '../contracts/wj'
 import { JNS_ADDRESS, jnsABI } from '../contracts/jns'
+import CoreAssetsPanel from '../components/CoreAssetsPanel.vue'
 import WJOperations from './WJOperations.vue'
 import CoreIdSection from './CoreIdSection.vue'
 import { publicClient } from '../config/client'
 import { encodeJVA, detectAddressFormat, normalizeToHex } from '../utils/jvaddress'
-import { JvLoading, JvPageState, JvHashText, JvAmount } from '../design-system'
+import { JvLoading, JvPageState, JvHashText } from '../design-system'
 import { initTimeCache, getYearBlockRange, getAvailableYears, getAvgBlockTime } from '../utils/timestamp-to-block'
 
 const router = useRouter()
@@ -201,17 +175,10 @@ function initAddress(raw: string) {
 }
 
 const jnsName = ref<string | null>(null)
-const JNS_BATCH_SIZE = 10
-const JNS_MAX_DISPLAY = 50
-const jnsTotal = ref(0)
-const jnsNames = ref<string[]>([])
-const jnsLoaded = ref(0)
-const loadingJnsHoldings = ref(false)
 
-const balance = ref<bigint | null>(null)
+// WJ 余额：由 CoreAssetsPanel 统一读取后通过 @wj-balance 事件回传，
+// 消除此处与 useCoreAssets 的重复 balanceOf 读取
 const wjBalance = ref<bigint | null>(null)
-const loadingBalance = ref(true)
-const loadingWJ = ref(true)
 
 const TRANSFER_SIG = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef' as `0x${string}`
 
@@ -254,60 +221,11 @@ const formatBalance = (bal: bigint | null): string => {
 }
 
 
-const loadBalance = async () => {
-  loadingBalance.value = true
-  try {
-    balance.value = await publicClient.getBalance({ address: hexAddress.value as `0x${string}` })
-  } catch { balance.value = null }
-  finally { loadingBalance.value = false }
-}
-
-const loadWJBalance = async () => {
-  loadingWJ.value = true
-  try {
-    wjBalance.value = await publicClient.readContract({ address: WJ_ADDRESS, abi: wjABI, functionName: 'balanceOf', args: [hexAddress.value as `0x${string}`] }) as bigint
-  } catch { wjBalance.value = null }
-  finally { loadingWJ.value = false }
-}
-
 const loadJnsName = async () => {
   try {
     const name = await publicClient.readContract({ address: JNS_ADDRESS, abi: jnsABI, functionName: 'addr2name', args: [hexAddress.value as `0x${string}`] }) as string
     jnsName.value = name || null
   } catch { jnsName.value = null }
-}
-
-const loadJnsHoldings = async () => {
-  loadingJnsHoldings.value = true
-  try {
-    // multicall 聚合：balanceOf + tokenOfOwnerByIndex×10 + _allTokensName×10 → 2 次 RPC
-    const { balance, names } = await fetchJnsHoldingBatch(hexAddress.value as `0x${string}`, 0, JNS_BATCH_SIZE, true)
-    const total = Number(balance ?? 0n)
-    jnsTotal.value = total
-    if (total === 0) return
-    const end = Math.min(JNS_BATCH_SIZE, Math.min(total, JNS_MAX_DISPLAY))
-    jnsNames.value.push(...names.slice(0, end))
-    jnsLoaded.value = Math.min(end, names.length)
-  } catch { jnsTotal.value = 0 }
-  finally { loadingJnsHoldings.value = false }
-}
-
-/** 跳转到 JNS 域名详情页 */
-const goJnsDetail = (name: string) => {
-  router.push(`/jns/${name}`)
-}
-
-const loadMoreJns = async () => {
-  if (loadingJnsHoldings.value) return
-  loadingJnsHoldings.value = true
-  try {
-    const start = jnsLoaded.value
-    const end = Math.min(start + JNS_BATCH_SIZE, Math.min(jnsTotal.value, JNS_MAX_DISPLAY))
-    const { names } = await fetchJnsHoldingBatch(hexAddress.value as `0x${string}`, start, end - start, false)
-    jnsNames.value.push(...names)
-    jnsLoaded.value = Math.min(end, start + names.length)
-  } catch { }
-  finally { loadingJnsHoldings.value = false }
 }
 
 /** 获取某年中与目标地址相关的代币转账日志 */
@@ -443,7 +361,7 @@ const nextYear = () => {
 
 onMounted(() => {
   if (error.value) return
-  loadBalance(); loadWJBalance(); loadJnsName(); loadJnsHoldings()
+  loadJnsName()
   loadTransactions(currentYear.value)
 })
 </script>

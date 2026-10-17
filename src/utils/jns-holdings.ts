@@ -7,8 +7,10 @@ import { publicClient } from '../config/client'
 import { JNS_ADDRESS, jnsABI } from '../contracts/jns'
 
 export interface JnsHoldingBatch {
-  /** 持有总数（withBalance=true 时返回） */
+  /** 持有总数（withBalance=true 且 balanceOf 成功时返回；失败为 undefined） */
   balance?: bigint
+  /** balanceOf 是否读取失败（withBalance=true 时有效；失败 ≠ 零持有，UI 需显式提示） */
+  balanceUnknown?: boolean
   /** 本批 tokenId（越界/失败的已过滤） */
   tokenIds: bigint[]
   /** 本批域名名字（与 tokenIds 一一对应） */
@@ -45,14 +47,21 @@ export async function fetchJnsHoldingBatch(
   // allowFailure: true —— 持有数少于 count 时，越界 index 会 revert，过滤掉即可
   const aResults = await publicClient.multicall({ contracts: aCalls, allowFailure: true })
 
-  const balance = withBalance ? (aResults[0].result as bigint | undefined) : undefined
+  // balanceOf 失败必须显式区分：status 非 success 时为「未知」，绝不用 undefined 掩盖成 0
+  let balance: bigint | undefined
+  let balanceUnknown = false
+  if (withBalance) {
+    const br = aResults[0]
+    if (br.status === 'success') balance = br.result as bigint
+    else balanceUnknown = true
+  }
   const tokenIds = (withBalance ? aResults.slice(1) : aResults)
     .filter((r) => r.status === 'success')
     .map((r) => r.result as bigint)
 
   // ── 步骤 B：_allTokensName × tokenIds（依赖 A 的结果）──
   if (tokenIds.length === 0) {
-    return { balance, tokenIds: [], names: [] }
+    return { balance, balanceUnknown, tokenIds: [], names: [] }
   }
   const bCalls = tokenIds.map((id) => ({
     address: JNS_ADDRESS,
@@ -66,5 +75,5 @@ export async function fetchJnsHoldingBatch(
     .filter((r) => r.status === 'success')
     .map((r) => r.result as string)
 
-  return { balance, tokenIds, names }
+  return { balance, balanceUnknown, tokenIds, names }
 }

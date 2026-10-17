@@ -663,7 +663,9 @@ const searchDomainByName = (name: string) => {
 /** 复制分享链接 */
 const copyShareLink = () => {
   if (!domainInfo.value) return
-  const url = `${window.location.origin}${window.location.pathname}#/jns/${domainInfo.value.name}`
+  // 域名名可能含 # / ? 空格等特殊字符（实测 822 域名中有含 . 含 - 含空格等），
+  // 直接拼接会破坏 hash 路由；encodeURIComponent 后 vue-router 读 params 时会自动 decode，对称还原。
+  const url = `${window.location.origin}${window.location.pathname}#/jns/${encodeURIComponent(domainInfo.value.name)}`
   navigator.clipboard.writeText(url).then(() => {
     // 简单提示
     alert('链接已复制到剪贴板')

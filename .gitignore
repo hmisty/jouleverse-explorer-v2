@@ -37,3 +37,7 @@ wallet.json
 .secret
 mnemonic.txt
 accounts.json
+
+# 构建缓存（vue-tsc --incremental 产物）
+tsconfig.tsbuildinfo
+*.tsbuildinfo

@@ -109,20 +109,22 @@
 
 #### P3-1：JNSVote 治理投票全模块
 - **子功能**：
-  - POAP 徽章验证（用于投票资格，注意：这里的 POAP 是 JNSVote 专属的，不是 Core ID 的 POPBadge）⏳ 未开始
-  - 投票资格检查 ⏳ 未开始
-  - 投票列表页 ⏳ 未开始
-  - 投票详情页 ⏳ 未开始
-  - 投票写操作（钱包签名）⏳ 未开始
-  - 投票进度展示（实时更新）🟡 部分支撑（见进展）
+  - JNSVote SBT 徽章 + 资格校验（原「POAP 徽章验证」为命名错误：真实对应物是 JNSVote SBT 徽章，资格校验依赖 JTI + JNS 持仓，非 Core ID 的 POPBadge）✅ 已完成
+  - 投票资格检查（JTI + JNS 持仓）✅ 已完成
+  - 投票列表页 ✅ 已完成
+  - 投票详情页（站内）⏳ 未完成（组件已就绪、待接线，见下）
+  - 投票写操作（钱包签名）✅ 已完成
+  - 投票进度展示（实时更新）✅ 已完成
 - **复杂度**：极高，建议单独规划一轮迭代
 - **合约**：需要获取 JNSVote 合约 ABI 和地址（v1 中的 `JNSVote.sol`）
 - **参考**：v1 `views/jnsVote*.html` 系列
-- **进展**：
-  - 🟡 投票进度展示（基础）：pin 机制已完成（PR#12，2026-08-10 合并）— ContractTool 重点关注面板（pinExpr 轻量表达式求值器 + PinPanel.vue）+ JNSVote 示例配置（提案总数/累计票数/最新提案/支持率/活跃状态，读链上只读值）。已上线 jscan2.f7t.cn。
-  - ⏳ 实时更新（WS/轮询）与完整投票数据读取逻辑：待 P3-1 排期实现
-  - ⏳ 其余 5 个子功能（POAP 验证/资格检查/列表页/详情页/写操作）：未启动
-- **状态**：🟡 进行中（仅进度展示有 pin 面板基础，主体功能未启动）
+- **进展**（核对日期 2026-10-17）：
+  - ✅ 提案列表只读展示（#15，commit 7b1b813）
+  - ✅ 投票写操作 voteFor/voteAgainst（#16，commit 852ae1b）
+  - ✅ 投票徽章画廊 + 区块实时更新（#19，commit b86a579）
+  - ✅ 资格校验 checkEligibility（JTI + JNS 持仓，`useJNSVote.ts` L270-295）
+  - ⏳ 提案详情页（站内）：组件已在 `feat/jnsvote-proposal-detail` 分支就绪（commit 849ad64，未接路由）；接线需等 PR #22 合并（会改 `router/index.ts` 加 `/jnsvote/:id` 路由、`JNSVote.vue` 卡片 `@click`、`ToolsHome.vue` 入口）
+- **状态**：🟡 主体功能已完成，仅剩「提案详情页（站内）接线」一项
 
 ---
 

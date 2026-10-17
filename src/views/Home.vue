@@ -43,6 +43,7 @@
         </div>
         <div class="search-hints">
           快速链接：<router-link to="/jns" class="quick-link">JNS 域名查询</router-link>
+          <router-link to="/domains" class="quick-link">{{ t('navEntry') }}</router-link>
           <router-link to="/tools" class="quick-link">工具集</router-link>
         </div>
       </div>
@@ -134,6 +135,7 @@ import type { TimelockData } from '../contracts/timelock'
 import { publicClient, wsPublicClient } from '../config/client'
 import { detectAddressFormat } from '../utils/jvaddress'
 import { JvLoading, JvPageState, JvHashText } from '../design-system'
+import { t } from '../i18n'
 
 const router = useRouter()
 

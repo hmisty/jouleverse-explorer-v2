@@ -10,6 +10,7 @@ import ToolsHome from '../views/ToolsHome.vue'
 import ContractToolView from '../views/ContractToolView.vue'
 import MerkleProofGenerator from '../views/MerkleProofGenerator.vue'
 import JNSVote from '../views/JNSVote.vue'
+import JnsDomains from '../views/JnsDomains.vue'
 
 const routes = [
   {
@@ -70,6 +71,11 @@ const routes = [
     path: '/jns',
     name: 'jnsQuery',
     component: JNSQuery
+  },
+  {
+    path: '/domains',
+    name: 'jnsDomains',
+    component: JnsDomains
   },
   {
     path: '/jns/:name',

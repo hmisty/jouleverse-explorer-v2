@@ -126,6 +126,20 @@
           </div>
         </router-link>
 
+        <router-link to="/domains" class="tool-card">
+          <div class="tool-card-header">
+            <h3 class="tool-card-title">
+              <span class="tool-icon">🗂️</span>
+              {{ t('navEntry') }}
+            </h3>
+            <span class="tool-status status-migrated">已迁移</span>
+          </div>
+          <p class="tool-desc">{{ t('subtitle') }}</p>
+          <div class="tool-card-footer">
+            <span class="tool-link">进入 →</span>
+          </div>
+        </router-link>
+
         <router-link to="/core/checkin" class="tool-card">
           <div class="tool-card-header">
             <h3 class="tool-card-title">
@@ -198,6 +212,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { toolboxContracts } from '../contracts/toolbox'
+import { t } from '../i18n'
 
 const coreContracts = computed(() => toolboxContracts.filter((c) => c.category === 'core'))
 const ecoContracts = computed(() => toolboxContracts.filter((c) => c.category === 'eco'))

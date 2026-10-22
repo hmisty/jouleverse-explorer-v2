@@ -112,19 +112,19 @@
   - JNSVote SBT 徽章 + 资格校验（原「POAP 徽章验证」为命名错误：真实对应物是 JNSVote SBT 徽章，资格校验依赖 JTI + JNS 持仓，非 Core ID 的 POPBadge）✅ 已完成
   - 投票资格检查（JTI + JNS 持仓）✅ 已完成
   - 投票列表页 ✅ 已完成
-  - 投票详情页（站内）⏳ 未完成（组件已就绪、待接线，见下）
+  - 投票详情页（站内）✅ 已完成（路由 + 卡片跳转已接线，2026-10-20 commit a5d3d76）
   - 投票写操作（钱包签名）✅ 已完成
   - 投票进度展示（实时更新）✅ 已完成
 - **复杂度**：极高，建议单独规划一轮迭代
 - **合约**：需要获取 JNSVote 合约 ABI 和地址（v1 中的 `JNSVote.sol`）
 - **参考**：v1 `views/jnsVote*.html` 系列
-- **进展**（核对日期 2026-10-17）：
+- **进展**（核对日期 2026-10-22）：
   - ✅ 提案列表只读展示（#15，commit 7b1b813）
   - ✅ 投票写操作 voteFor/voteAgainst（#16，commit 852ae1b）
   - ✅ 投票徽章画廊 + 区块实时更新（#19，commit b86a579）
   - ✅ 资格校验 checkEligibility（JTI + JNS 持仓，`useJNSVote.ts` L270-295）
-  - ⏳ 提案详情页（站内）：组件已在 `feat/jnsvote-proposal-detail` 分支就绪（commit 849ad64，未接路由）；接线需等 PR #22 合并（会改 `router/index.ts` 加 `/jnsvote/:id` 路由、`JNSVote.vue` 卡片 `@click`、`ToolsHome.vue` 入口）
-- **状态**：🟡 主体功能已完成，仅剩「提案详情页（站内）接线」一项
+  - ✅ 提案详情页（站内）：已完整接线（commit a5d3d76，2026-10-20 合入 explorer-v2）——`router/index.ts` 有 `/jnsvote/:id` 路由、`JNSVote.vue` 提案卡片 `@click` 跳转、`JNSVoteProposalDetail.vue` 组件三个入口齐备（核实方式：`git merge-base --is-ancestor a5d3d76 upstream/explorer-v2` 为真，且构建产物 `dist/assets/index-*.js` 内含 `jnsvoteProposalDetail` 路由名）
+- **状态**：✅ P3-1 全部子功能已完成。唯一残留是 `/tools` 工具集页仍把 JNSVote 卡片挂在「即将推出」分区且不可点击，属展示层收尾，已在 PR #48（`fix/final-polish`）中改为可点卡片，待合入
 
 ---
 
@@ -241,7 +241,7 @@ src/design-system/
   ✅ JNS 域名操作 — 绑定/解绑/发送J（2026-07-28）
 
 中期 ───────────────────────────────────────────
-  P3-1    JNSVote 治理投票（复杂，单独排期）— 🟡 进度展示已获 pin 面板基础（PR#12），主体未启动
+  P3-1    JNSVote 治理投票 — ✅ 主体全部完成（列表/详情/写操作/资格校验/进度实时，2026-10-22 核实）；残留：/tools 入口卡片可点化随 PR #48 合入
 
 2026-08-11 已清理（代码质量/性能收尾）────────
   ✅ format.ts 统一（utils/format.ts）
@@ -281,4 +281,4 @@ src/design-system/
 
 ---
 
-*最后更新：2026-08-11（大白 💎）*
+*最后更新：2026-10-22（大白 💎）*

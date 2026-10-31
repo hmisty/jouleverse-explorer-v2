@@ -204,10 +204,11 @@
 | 测试环境 mock | `tests/setup.ts` 装 `window.matchMedia` mock，`vitest.config.ts` 挂 `setupFiles` | ✅ 已合入 | PR #51（c570d0f）|
 | `tests/` 纳入 typecheck | 新增 `tsconfig.test-vitest.json`（spec + setup + vitest.config）/ `tsconfig.test-node.json`（`jvaddress.test.ts`，node:test + 原生 strip-types），根 `tsconfig.json` references 追加两者 | ✅ 已合入 | PR #53（c2c6149）|
 | mock 归因注释修正 | 查明真根因是 **jsdom 30.1.3 全包 0 处 `matchMedia` 实现**（非 node 版本差异、非 npm/pnpm 布局差异）；此前 CI 未暴露是因**无 spec 覆盖该路径**（覆盖盲区），非环境差异 | ✅ 已合入 | PR #54（8984455）|
-| theme store 冒烟用例 | `tests/theme-store.spec.ts` 9 条（初始化 2 / 三态 4 / 写操作 2 / `$dispose` 清理 1），前两条初始化用例**不自装 mock**，完全依赖 `setup.ts` | ⏳ 待合入 | PR #56（dd192ab）|
+| theme store 冒烟用例 | `tests/theme-store.spec.ts` 9 条（初始化 2 / 三态 4 / 写操作 2 / `$dispose` 清理 1），前两条初始化用例**不自装 mock**，完全依赖 `setup.ts` | ✅ 已合入 | PR #56（dd192ab → merge 20a19cc）|
 
-**当前基线**（`explorer-v2` 分支）：`npm run build` EXIT 0 / `vitest run` **13 passed** / `node --test tests/jvaddress.test.ts` **3 passed**。
-PR #56 合入后为 `vitest` **22 passed**（+9）。
+**当前基线**（`explorer-v2` 分支 `e0cf7f5`，2026-10-30 实测）：`npm run build` EXIT 0 / `vitest run` **22 passed**（3 files）/ `node --test tests/jvaddress.test.ts` **3 passed**。
+
+> PR #56 合入后基线已从 13 升到 **22**（+9，即 theme store 9 条真生效）。上表四项现全部为「已合入」，**2026-10-30 这批（#57/#58/#56/#59）已全部 merge，open PR/Issue 归零**。
 
 **两条必须记住的规则**：
 
@@ -315,6 +316,20 @@ src/design-system/
 
 来源：PR #28（wallet injected connector）真机测试期间实测，`*.trycloudflare.com` 被 MetaMask 拦截（见 issue #34）。
 
+### RPC 端点配置（2026-10-29 起，PR #59）
+
+链上读写全部走 **无端口正式端点**，旧 `:8503` / `:8505` 已废弃：
+
+| 用途 | 端点 |
+|------|------|
+| HTTP RPC | `https://rpc.jnsdao.com` |
+| WebSocket | `wss://rpc.jnsdao.com/ws` |
+
+- 落点：`src/config/client.ts`、`src/config/chain.ts`、`src/stores/wallet.ts` 及 `CoreIdCheckIn.vue` / `WJOperations.vue` / `JNSVote.vue` / `JNSVoteProposalDetail.vue` 用户提示文案，共 10 处硬编码
+- 验收（2026-10-30）：构建产物 `dist/assets/*.js` 内 `rpc.jnsdao.com` 命中 9 处、`:8503`/`:8505` 残留 **0**；
+  `scripts/smoke-jnsvote.mjs` 真实链 10/10 通过（含 WS 收到 2 个区块，间隔 15.2s，块号单调递增）
+- ⚠️ 新代码**不得**再引入带端口端点；jscan v1（`/var/www/explorer/app/.rpc.txt`）仍为 `:8503`，属遗留待处理
+
 ---
 
-*最后更新：2026-10-27（大白 💎）—— 补记「测试与类型检查基础设施」章节（PR #51/#53/#54/#56）*
+*最后更新：2026-10-31（大白 💎）—— 同步 10-30 合并后状态：四项质量基础设施全部「已合入」、测试基线 13 → 22 passed、补记 RPC 无端口端点配置（PR #59）*

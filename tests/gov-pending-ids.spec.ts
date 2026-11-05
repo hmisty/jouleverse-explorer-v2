@@ -6,6 +6,7 @@ import { createProposalABI } from '../src/contracts/jnsvoteGovernance'
 const mocks = vi.hoisted(() => ({
   readContract: vi.fn(),
   multicall: vi.fn(),
+  getBlockNumber: vi.fn(),
   writeContract: vi.fn(),
   waitForTransactionReceipt: vi.fn(),
 }))
@@ -42,6 +43,7 @@ function arrange(
   transactions = new Map<bigint, StoredTx>(),
   opts: { getConfirmationsFail?: boolean; isConfirmedFail?: boolean } = {},
 ) {
+  mocks.getBlockNumber.mockResolvedValue(50n)
   mocks.readContract.mockImplementation(async ({ functionName, args }: ReadCall) => {
     if (functionName === 'isOwner') return true
     if (functionName === 'getTransactionCount') return count
@@ -202,9 +204,9 @@ describe('治理待执行交易编号回归', () => {
     mocks.waitForTransactionReceipt.mockResolvedValue({ status: 'success' })
     const governance = useJNSVoteGovernance()
 
-    await expect(governance.executeTx(5)).rejects.toThrow('不是「创建提案」')
-    await expect(governance.executeTx(6)).rejects.toThrow('不是「创建提案」')
-    await expect(governance.executeTx(7)).rejects.toThrow('不是「创建提案」')
+    await expect(governance.executeTx(5)).rejects.toThrow('不是支持的治理交易')
+    await expect(governance.executeTx(6)).rejects.toThrow('不是支持的治理交易')
+    await expect(governance.executeTx(7)).rejects.toThrow('不是支持的治理交易')
     // 三种非法交易均未触链上 executeTransaction
     expect(mocks.writeContract).not.toHaveBeenCalled()
   })

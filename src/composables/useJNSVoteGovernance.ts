@@ -1,4 +1,4 @@
-// JNSVote 治理端数据层：创建提案（多签流程）+ 待确认交易管理
+// JNSVote 治理端：四类治理操作共用多签流程与发送前复核
 // 权限模型：createProposal 是 onlyOwner，owner = 2/3 多签。
 //   前端仅对「签名人」展示治理入口；创建提案 = submitTransaction（提交者自动成为首确认人），
 //   其余签名人 confirm，确认数达标后任一签名人 execute。
@@ -6,23 +6,22 @@
 
 import { ref } from 'vue'
 import { writeContract, waitForTransactionReceipt, switchChain } from 'wagmi/actions'
-import { encodeFunctionData, decodeFunctionData, toFunctionSelector } from 'viem'
+import { toEventSelector, type Hex } from 'viem'
 import { publicClient } from '../config/client'
 import { jouleverseChain } from '../config/chain'
 import { config as wagmiConfig } from '../stores/wallet'
-import { JNSVOTE_ADDRESS } from '../contracts/jnsvote'
+import { JNSVOTE_ADDRESS, jnsVoteABI } from '../contracts/jnsvote'
 import {
   JNSVOTE_MULTISIG_ADDRESS,
   multisigABI,
-  createProposalABI,
 } from '../contracts/jnsvoteGovernance'
 import { safeErrorMessage } from '../utils/error'
+import { assertManagedOperation, assertProposalInput, decodeGovernanceCall, encodeGovernanceCall, type GovernanceCall, type ManagedProposal, type ProposalInput } from '../utils/jnsvote-governance'
 
-// createProposal(string,string,uint256,uint256) 的 4 字节选择器
-// 从签名派生（与 createProposalABI 同源强一致），避免硬编码魔法值与 ABI 静默错位
-const CREATE_PROPOSAL_SELECTOR = toFunctionSelector('function createProposal(string,string,uint256,uint256)')
-
-export interface PendingProposalTx {
+export interface PendingProposalTx extends GovernanceCall {
+  data: Hex
+  proposal?: ManagedProposal
+  validationError?: string
   txId: number
   destination: string
   executed: boolean
@@ -31,7 +30,7 @@ export interface PendingProposalTx {
   confirmationCount: number
   required: number
   confirmations: string[] // 已确认的签名人地址（小写）
-  // 解码后的 createProposal 参数
+  // 解码后的治理参数；已有提案另附最新链上状态
   title: string
   link: string
   timeBegin: bigint
@@ -45,14 +44,16 @@ export function useJNSVoteGovernance() {
   const pendingTxs = ref<PendingProposalTx[]>([])
   const isLoading = ref(false)
   const loadError = ref<string | null>(null)
+  const isWriting = ref(false)
+  const pendingHash = ref<Hex | null>(null)
 
   // 并发守卫序号：过期请求完成后丢弃写入，避免账户切换/断连时旧数据覆盖新状态
   let govSeq = 0
 
-  // 读取治理状态：当前地址是否签名人 + 待确认的「创建提案」交易列表
+  // 读取治理状态：当前地址是否签名人 + 待确认的四类治理交易列表
   // 安全边界（审计 2026-11-02 三项阻塞）：
   //   1. isOwner 前置短路——非签名人仅 1 次轻量 isOwner 调用即返回，不触发后续多签扫描（原则二）
-  //   2. 列表只保留 destination === JNSVote 且 selector === createProposal 的交易，
+  //   2. 列表只保留 destination === JNSVote 且 selector 属于四类治理方法 的交易，
   //      避免把多签里积压的其它交易（WJ 提现 / ERC-20 划转 / addOwner 等）误展示成「创建提案」并误执行
   async function loadGovernance(address: string) {
     const seq = ++govSeq
@@ -76,12 +77,15 @@ export function useJNSVoteGovernance() {
       }
       if (seq === govSeq) isSigner.value = true
 
+      // 同一区块读取数量、编号与多签详情，避免分步查询期间状态变化导致补零。
+      const snapshotBlock = await publicClient.getBlockNumber({ cacheTime: 0 })
       // 签名人：读签名人列表 + 确认门槛
       const [ownersRaw, requiredRaw] = await publicClient.multicall({
         contracts: [
           { address: JNSVOTE_MULTISIG_ADDRESS, abi: multisigABI, functionName: 'getOwners' },
           { address: JNSVOTE_MULTISIG_ADDRESS, abi: multisigABI, functionName: 'required' },
         ],
+        blockNumber: snapshotBlock,
         allowFailure: false,
       })
       const owners = (ownersRaw as readonly string[]).map((a) => a.toLowerCase())
@@ -99,8 +103,10 @@ export function useJNSVoteGovernance() {
         abi: multisigABI,
         functionName: 'getTransactionCount',
         args: [true, false],
+        blockNumber: snapshotBlock,
       })
       const count = Number(countRaw)
+      if (!Number.isSafeInteger(count) || count < 0) throw new Error('待执行交易数量超出安全范围')
       if (count === 0) {
         if (seq === govSeq) pendingTxs.value = []
         return
@@ -110,8 +116,12 @@ export function useJNSVoteGovernance() {
         abi: multisigABI,
         functionName: 'getTransactionIds',
         args: [0n, BigInt(count), true, false],
+        blockNumber: snapshotBlock,
       })
       const ids = (idsRaw as readonly bigint[]).slice(0, count).map((n) => Number(n))
+      if (ids.length !== count || new Set(ids).size !== ids.length || ids.some((id) => !Number.isSafeInteger(id) || id < 0)) {
+        throw new Error('多签交易编号不完整或超出安全范围，请刷新')
+      }
 
       // 先只读 transactions（destination/value/data/executed）做过滤，
       // 避免对无关交易额外读 isConfirmed/getConfirmations
@@ -121,30 +131,21 @@ export function useJNSVoteGovernance() {
         functionName: 'transactions' as const,
         args: [BigInt(id)] as const,
       }))
-      const txResults = await publicClient.multicall({ contracts: txCalls, allowFailure: true })
+      const txResults = await publicClient.multicall({ contracts: txCalls, blockNumber: snapshotBlock, allowFailure: true })
 
-      // 过滤 + 解码：只保留「JNSVote 目标 + createProposal selector」且能成功解码的交易
-      const matched: {
-        id: number
-        destination: string
-        executed: boolean
-        title: string
-        link: string
-        timeBegin: bigint
-        timeEnd: bigint
-      }[] = []
+      // 过滤 + 解码：只保留四类零金额治理调用，未知或畸形数据不展示操作按钮
+      const matched: (GovernanceCall & { id: number; destination: string; executed: boolean; data: Hex })[] = []
       ids.forEach((id, i) => {
         const r = txResults[i]
         if (!r.result) return
         const [destination, value, data, executed] = r.result as readonly [string, bigint, string, boolean]
         if (destination.toLowerCase() !== JNSVOTE_ADDRESS.toLowerCase()) return
-        // 本链不支持原生 J 转账，携带 value > 0 的创建提案交易执行必 revert，不入列表
-        if (value !== 0n) return
-        if (!data || data === '0x' || data.slice(0, 10).toLowerCase() !== CREATE_PROPOSAL_SELECTOR) return
-        // selector 已匹配，但参数可能畸形；解码失败则不入列表（无法确认是合法创建提案）
+        // 四类治理方法均为 nonpayable；携带非零原生金额的交易不入列表
+        if (value !== 0n || executed) return
+        // selector 已匹配，但参数可能畸形；解码失败则不入列表（无法确认是受支持的治理调用）
         try {
-          const decoded = decodeProposalData(data)
-          matched.push({ id, destination, executed: Boolean(executed), ...decoded })
+          const decoded = decodeGovernanceCall(data as Hex)
+          matched.push({ id, destination, executed: Boolean(executed), data: data as Hex, ...decoded })
         } catch {
           // 跳过无法解码的交易
         }
@@ -155,7 +156,7 @@ export function useJNSVoteGovernance() {
         { address: JNSVOTE_MULTISIG_ADDRESS, abi: multisigABI, functionName: 'isConfirmed' as const, args: [BigInt(m.id)] as const },
         { address: JNSVOTE_MULTISIG_ADDRESS, abi: multisigABI, functionName: 'getConfirmations' as const, args: [BigInt(m.id)] as const },
       ])
-      const confResults = await publicClient.multicall({ contracts: confCalls, allowFailure: true })
+      const confResults = confCalls.length ? await publicClient.multicall({ contracts: confCalls, blockNumber: snapshotBlock, allowFailure: true }) : []
 
       const list: PendingProposalTx[] = matched.map((m, i) => {
         const confRes = confResults[i * 2]
@@ -168,6 +169,7 @@ export function useJNSVoteGovernance() {
           ? []
           : (confsRes.result as readonly string[]).map((a) => a.toLowerCase())
         return {
+          ...m,
           txId: m.id,
           destination: m.destination,
           executed: m.executed,
@@ -183,6 +185,27 @@ export function useJNSVoteGovernance() {
         }
       })
 
+      // 仅对已有提案治理交易读取状态，同一提案去重，失败时保持可见但阻断操作。
+      const proposalStates = new Map<bigint, ManagedProposal | string>()
+      for (const item of list) {
+        if (item.proposalId === null) continue
+        let state = proposalStates.get(item.proposalId)
+        if (state === undefined) {
+          try { state = await readManagedProposal(item.proposalId) }
+          catch (e) { state = safeErrorMessage(e) }
+          proposalStates.set(item.proposalId, state)
+        }
+        if (typeof state === 'string') item.validationError = state
+        else {
+          item.proposal = state
+          if (item.operation === 'disable' || item.operation === 'reenable') {
+            item.title = state.title; item.link = state.link
+            item.timeBegin = state.timeBegin; item.timeEnd = state.timeEnd
+          }
+          try { assertManagedOperation(item.operation as 'modify' | 'disable' | 'reenable', state) }
+          catch (e) { item.validationError = safeErrorMessage(e) }
+        }
+      }
       if (seq === govSeq) pendingTxs.value = list
     } catch (e) {
       if (seq === govSeq) loadError.value = safeErrorMessage(e)
@@ -191,44 +214,77 @@ export function useJNSVoteGovernance() {
     }
   }
 
-  // 解码 createProposal 的 calldata
-  function decodeProposalData(data: string): { title: string; link: string; timeBegin: bigint; timeEnd: bigint } {
-    const result = decodeFunctionData({
-      abi: createProposalABI,
-      data: data as `0x${string}`,
-    })
-    const args = result.args as readonly [string, string, bigint, bigint]
-    return { title: args[0], link: args[1], timeBegin: args[2], timeEnd: args[3] }
+  async function readManagedProposal(id: bigint): Promise<ManagedProposal> {
+    if (id < 1n || id >= 2n ** 256n) throw new Error('提案编号无效，编号从1开始')
+    const currentBlock = await publicClient.getBlockNumber({ cacheTime: 0 })
+    const [total, raw] = await publicClient.multicall({ contracts: [
+      { address: JNSVOTE_ADDRESS, abi: jnsVoteABI, functionName: '_totalProposals' },
+      { address: JNSVOTE_ADDRESS, abi: jnsVoteABI, functionName: '_proposals', args: [id] },
+    ], blockNumber: currentBlock, allowFailure: false })
+    if (id > total) throw new Error('提案不存在')
+    const [title, link, timeBegin, timeEnd, , , , , , disabled] = raw
+    return { id, title, link, timeBegin, timeEnd, disabled, currentBlock }
   }
 
-  // 创建提案：提交多签交易（提交者自动成为首确认人），返回 transactionId
-  async function submitProposal(input: {
-    title: string
-    link: string
-    timeBegin: bigint
-    timeEnd: bigint
-  }): Promise<number> {
-    const data = encodeFunctionData({
-      abi: createProposalABI,
-      functionName: 'createProposal',
-      args: [input.title, input.link, input.timeBegin, input.timeEnd],
-    })
-
-    await ensureChain()
-
-    const hash = await writeContract(wagmiConfig, {
-      address: JNSVOTE_MULTISIG_ADDRESS,
-      abi: multisigABI,
-      functionName: 'submitTransaction',
-      args: [JNSVOTE_ADDRESS, 0n, data],
-    })
-
-    const receipt = await waitForTransactionReceipt(wagmiConfig, { hash })
-    if (receipt.status === 'reverted') {
-      throw new Error('提交多签交易已回滚')
+  async function validateCall(call: GovernanceCall) {
+    if (call.operation === 'create') {
+      assertProposalInput(call, await publicClient.getBlockNumber({ cacheTime: 0 }))
+    } else {
+      const proposal = await readManagedProposal(call.proposalId!)
+      assertManagedOperation(call.operation, proposal)
+      if (call.operation === 'modify') assertProposalInput(call, proposal.currentBlock)
     }
+  }
 
-    return parseSubmissionTxId(receipt)
+  async function withWrite<T>(task: (seq: number) => Promise<T>): Promise<T> {
+    if (isWriting.value || pendingHash.value) throw new Error('已有操作正在处理，请先查询已广播交易回执')
+    isWriting.value = true
+    try { return await task(govSeq) } finally { isWriting.value = false }
+  }
+  function assertCurrent(seq: number) {
+    if (seq !== govSeq) throw new Error('账户或页面状态已变化，已取消发送，请重新核验')
+  }
+  async function finishReceipt(hash: Hex) {
+    const receipt = await waitForTransactionReceipt(wagmiConfig, { hash, chainId: jouleverseChain.id })
+    pendingHash.value = null
+    if (receipt.status === 'reverted') throw new Error('多签交易已回滚')
+    if (receipt.transactionHash && receipt.transactionHash.toLowerCase() !== hash.toLowerCase()) throw new Error('交易已被替换或取消，请核查回执')
+    const failure = toEventSelector('ExecutionFailure(uint256)')
+    if (receipt.logs?.some((log) => log.address.toLowerCase() === JNSVOTE_MULTISIG_ADDRESS.toLowerCase() && log.topics[0] === failure)) {
+      throw new Error('多签已上链但内部治理调用失败，请核查提案状态，不能视为执行成功')
+    }
+    return receipt
+  }
+  async function checkPendingReceipt() {
+    if (!pendingHash.value || isWriting.value) return
+    isWriting.value = true
+    try { await finishReceipt(pendingHash.value) } finally { isWriting.value = false }
+  }
+  async function submitCall(call: GovernanceCall): Promise<number> {
+    return withWrite(async (seq) => {
+      const data = encodeGovernanceCall(call)
+      await ensureChain()
+      await validateCall(call) // 在切链之后读取最新提案和区块，失败即停止。
+      assertCurrent(seq)
+      const hash = await writeContract(wagmiConfig, {
+        address: JNSVOTE_MULTISIG_ADDRESS, abi: multisigABI, functionName: 'submitTransaction',
+        args: [JNSVOTE_ADDRESS, 0n, data],
+      })
+      pendingHash.value = hash
+      return parseSubmissionTxId(await finishReceipt(hash))
+    })
+  }
+  function submitProposal(input: ProposalInput) {
+    return submitCall({ operation: 'create', proposalId: null, ...input })
+  }
+  function submitModification(id: bigint, input: ProposalInput) {
+    return submitCall({ operation: 'modify', proposalId: id, ...input })
+  }
+  function submitDisable(id: bigint) {
+    return submitCall({ operation: 'disable', proposalId: id, title: '', link: '', timeBegin: 0n, timeEnd: 0n })
+  }
+  function submitReenable(id: bigint) {
+    return submitCall({ operation: 'reenable', proposalId: id, title: '', link: '', timeBegin: 0n, timeEnd: 0n })
   }
 
   // 确保钱包在 Jouleverse 链上（与 useJNSVote.vote 一致；已在目标链时 switchChain 直接成功）
@@ -240,7 +296,7 @@ export function useJNSVoteGovernance() {
   // Gnosis MultiSigWallet 事件：event Submission(uint indexed transactionId)
   // topic0 = keccak256('Submission(uint256)')，topic[1] = indexed transactionId
   function parseSubmissionTxId(receipt: { logs: readonly { address?: string; topics: readonly string[] }[] }): number {
-    const SUBMISSION_TOPIC = '0xc0ba8fe4b176c1714197d43b9cc6bcf797a4a7461c5fe8d0ef6e184ae7601e51'
+    const SUBMISSION_TOPIC = toEventSelector('Submission(uint256)')
     for (const log of receipt.logs) {
       // 校验发出合约是多签地址，避免同交易内其它合约误发同名事件被错解析
       if (
@@ -248,60 +304,42 @@ export function useJNSVoteGovernance() {
         log.topics.length >= 2 &&
         log.topics[0].toLowerCase() === SUBMISSION_TOPIC
       ) {
-        return parseInt(log.topics[1], 16)
+        const id = BigInt(log.topics[1])
+        return id <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(id) : -1
       }
     }
     // 兜底：无法解析时返回 -1（提交成功但 id 未知，界面提示刷新查看）
     return -1
   }
 
-  // 确认交易（其余签名人）
-  async function confirmTx(txId: number): Promise<void> {
-    await ensureChain()
-    const hash = await writeContract(wagmiConfig, {
-      address: JNSVOTE_MULTISIG_ADDRESS,
-      abi: multisigABI,
-      functionName: 'confirmTransaction',
-      args: [BigInt(txId)],
+  async function preflightTx(txId: number, expectedData?: Hex) {
+    if (!Number.isSafeInteger(txId) || txId < 0) throw new Error('多签交易编号无效')
+    const raw = await publicClient.readContract({
+      address: JNSVOTE_MULTISIG_ADDRESS, abi: multisigABI, functionName: 'transactions', args: [BigInt(txId)],
     })
-    const receipt = await waitForTransactionReceipt(wagmiConfig, { hash })
-    if (receipt.status === 'reverted') {
-      throw new Error('确认多签交易已回滚')
-    }
+    const [destination, value, data, executed] = raw as readonly [string, bigint, Hex, boolean]
+    if (executed) throw new Error('该交易已被执行，请刷新列表')
+    if (destination.toLowerCase() !== JNSVOTE_ADDRESS.toLowerCase() || value !== 0n) throw new Error('该交易不是支持的治理交易，已阻止执行')
+    if (expectedData && expectedData.toLowerCase() !== data.toLowerCase()) throw new Error('治理调用与已审阅内容不一致，请刷新列表')
+    let call: GovernanceCall
+    try { call = decodeGovernanceCall(data) } catch { throw new Error('该交易不是支持的治理交易，已阻止执行') }
+    await validateCall(call)
   }
-
-  // 执行交易（确认数达标后任一签名人）
-  async function executeTx(txId: number): Promise<void> {
-    await ensureChain()
-    // 防御深度：执行前先读该交易校验「目标 + value + selector」，不依赖列表过滤。
-    // 防止将来有人从别处拿到 txId 直接调本函数而误执行多签里积压的其它交易（如 WJ 提现）。
-    const tx = await publicClient.readContract({
-      address: JNSVOTE_MULTISIG_ADDRESS,
-      abi: multisigABI,
-      functionName: 'transactions',
-      args: [BigInt(txId)],
+  // 确认可能自动执行，因此确认与显式执行使用相同的链上复核。
+  async function sendTxAction(functionName: 'confirmTransaction' | 'executeTransaction', txId: number, expectedData?: Hex) {
+    await withWrite(async (seq) => {
+      await ensureChain()
+      await preflightTx(txId, expectedData)
+      assertCurrent(seq)
+      const hash = await writeContract(wagmiConfig, {
+        address: JNSVOTE_MULTISIG_ADDRESS, abi: multisigABI, functionName, args: [BigInt(txId)],
+      })
+      pendingHash.value = hash
+      await finishReceipt(hash)
     })
-    const [destination, value, data, executed] = tx as readonly [string, bigint, string, boolean]
-    if (executed) {
-      throw new Error('该交易已被执行，请刷新列表')
-    }
-    if (destination.toLowerCase() !== JNSVOTE_ADDRESS.toLowerCase() || value !== 0n) {
-      throw new Error('该交易不是「创建提案」类交易，已阻止执行')
-    }
-    if (!data || data === '0x' || data.slice(0, 10).toLowerCase() !== CREATE_PROPOSAL_SELECTOR) {
-      throw new Error('该交易不是「创建提案」类交易，已阻止执行')
-    }
-    const hash = await writeContract(wagmiConfig, {
-      address: JNSVOTE_MULTISIG_ADDRESS,
-      abi: multisigABI,
-      functionName: 'executeTransaction',
-      args: [BigInt(txId)],
-    })
-    const receipt = await waitForTransactionReceipt(wagmiConfig, { hash })
-    if (receipt.status === 'reverted') {
-      throw new Error('执行多签交易已回滚')
-    }
   }
+  function confirmTx(txId: number, expectedData?: Hex) { return sendTxAction('confirmTransaction', txId, expectedData) }
+  function executeTx(txId: number, expectedData?: Hex) { return sendTxAction('executeTransaction', txId, expectedData) }
 
   // 重置治理状态并作废在途请求（断连时调用，避免 in-flight 完成后回写旧账户数据）
   function reset(): void {
@@ -323,6 +361,13 @@ export function useJNSVoteGovernance() {
     loadGovernance,
     reset,
     submitProposal,
+    readManagedProposal,
+    submitModification,
+    submitDisable,
+    submitReenable,
+    isWriting,
+    pendingHash,
+    checkPendingReceipt,
     confirmTx,
     executeTx,
   }

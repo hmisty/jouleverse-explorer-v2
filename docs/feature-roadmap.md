@@ -18,7 +18,7 @@
 | 3 | 交易详情页 | ✅ 已完成 | `TransactionDetail.vue` | |
 | 4 | 地址详情页（基础） | ✅ 已完成 | `AddressDetail.vue` | |
 | 5 | 搜索框（区块/交易/地址） | ✅ 已完成 | `Home.vue` 内联 | |
-| 6 | 网络状态指示 | ✅ 已完成 | `Home.vue` 内联 status-pill | 原独立组件 `src/components/NetworkStatus.vue` 已于 f567f0c（2026-06-28）删除，逻辑并入 Home.vue（L13–16 渲染 / L151 `networkStatus` / L246-255 判定）|
+| 6 | 网络状态指示 | ✅ 已完成 | `Home.vue` 内联 status-pill | 原独立组件 `src/components/NetworkStatus.vue` 已于 f567f0c（2026-06-28）删除，逻辑并入 Home.vue（`status-pill` 模板区块 / `networkStatus` ref / `fetchLatestBlocks` 内 diff 判定）|
 | 7 | Timelock 能量信息 | ✅ 已完成 | `Home.vue` | |
 | 8 | 运行时间统计 | ✅ 已完成 | `Home.vue` | |
 | 9 | MetaMask 钱包连接 | ✅ 已完成 | `App.vue` + `stores/wallet.ts` | |
@@ -147,9 +147,9 @@
   - ✅ 提案列表只读展示（#15，commit 7b1b813）
   - ✅ 投票写操作 voteFor/voteAgainst（#16，commit 852ae1b）
   - ✅ 投票徽章画廊 + 区块实时更新（#19，commit b86a579）
-  - ✅ 资格校验 checkEligibility（JTI + JNS 持仓，`useJNSVote.ts` L270-295）
+  - ✅ 资格校验 `useJNSVote.ts` 函数 `checkEligibility`（JTI + JNS 持仓）
   - ✅ 提案详情页（站内）：已完整接线（commit a5d3d76，2026-10-20 合入 explorer-v2）——`router/index.ts` 有 `/jnsvote/:id` 路由、`JNSVote.vue` 提案卡片 `@click` 跳转、`JNSVoteProposalDetail.vue` 组件三个入口齐备（核实方式：`git merge-base --is-ancestor a5d3d76 upstream/explorer-v2` 为真，且构建产物 `dist/assets/index-*.js` 内含 `jnsvoteProposalDetail` 路由名）
-- **状态**：✅ P3-1 全部子功能已完成，展示层收尾亦已闭环——`/tools` 工具集页的 JNSVote 卡片已从「即将推出」分区移出、改为可点击卡片（PR #48，commit bfb29a8，2026-10-22 合入）；核实方式：`src/views/ToolsHome.vue:157-169` 为 `router-link to="/jnsvote"` 且标注「已迁移」，而「即将推出」分区（L173 起）仅剩「数据分析面板」「多签钱包管理」两项
+- **状态**：✅ P3-1 全部子功能已完成，展示层收尾亦已闭环——`/tools` 工具集页的 JNSVote 卡片已从「即将推出」分区移出、改为可点击卡片（PR #48，commit bfb29a8，2026-10-22 合入）；核实方式：`src/views/ToolsHome.vue` 的「链上功能」分区含 `router-link to="/jnsvote"` 卡片并标注「已迁移」
 
   **治理端（2026-11-03 补齐，PR #62）**：`createProposal` 是 `onlyOwner`，owner = 2/3 多签 `0x4eF599b6E39D950D6Ddbd830fF5f95e06770C1B3`（签名人 Koant J-0 / 剪云为裳 J-37 / 明海云 J-7）。此前前端只有「投票端」，签名人无创建入口。现新增 `JNSVoteGovernancePanel.vue` + `useJNSVoteGovernance.ts` + `contracts/jnsvoteGovernance.ts`，`v-if="isSigner"` 门控。
 
@@ -196,11 +196,11 @@
 
 #### ✅ PERF-3：首页创世区块重复 fetch（已修复，2026-08-11 确认）
 - **问题**：`fetchLatestBlocks` 每次调用都 `await publicClient.getBlock({ blockNumber: 0n })` 获取创世区块计算运行时间。创世区块内容永远不变，但每次刷新都多一次 RPC。
-- **解决方案**：创世区块时间戳已硬编码为常量 `GENESIS_TIMESTAMP = 1664451960`（`Home.vue:222`），省去该 RPC 调用。
+- **解决方案**：创世区块时间戳已硬编码为常量 `GENESIS_TIMESTAMP = 1664451960`（`Home.vue` 常量 `GENESIS_TIMESTAMP`），省去该 RPC 调用。
 
 #### ✅ PERF-4：首页区块串行加载（已修复，2026-08-11 确认）
 - **问题**：`for (let i = 0; i < 10; i++) { await publicClient.getBlock(...) }` 串行获取 10 个区块。
-- **解决方案**：已改为 `await Promise.all(blockNumbers.map(n => publicClient.getBlock({ blockNumber: n })))`（`Home.vue:230`），并行加载。
+- **解决方案**：已改为 `await Promise.all(blockNumbers.map(n => publicClient.getBlock({ blockNumber: n })))`（`Home.vue` 函数 `fetchLatestBlocks`），并行加载。
 - **关联**：原列于代码质量表，已提升为性能问题并解决
 
 #### ✅ PERF-5：POP 历史加载无上限保护（已修复，2026-07-29）

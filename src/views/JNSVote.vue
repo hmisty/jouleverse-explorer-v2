@@ -93,6 +93,9 @@
       </div>
     </div>
 
+    <!-- 使用指南（参与投票 + 多签创建提案 + 结果判定） -->
+    <JNSVoteGuide />
+
     <!-- 治理端（多签签名人专属：创建提案） -->
     <JNSVoteGovernancePanel />
 
@@ -253,6 +256,7 @@ import { useJNSVote, mapVoteError, SwitchChainError } from '../composables/useJN
 import type { JNSVoteProposal } from '../composables/useJNSVote'
 import { JvLoading, JvPageState, JvHashText, JvStatusTag, JvActionButton } from '../design-system'
 import JNSVoteGovernancePanel from '../components/JNSVoteGovernancePanel.vue'
+import JNSVoteGuide from '../components/JNSVoteGuide.vue'
 
 const walletStore = useWalletStore()
 const router = useRouter()
@@ -320,7 +324,7 @@ function shortCid(link: string): string {
   return clean.length > 40 ? clean.slice(0, 20) + '…' + clean.slice(-16) : clean
 }
 
-// 站内跳转到提案详情页（详情页组件已就绪于 feat/jnsvote-proposal-detail，路由待 PR #22 合并后接线）
+// 站内跳转到提案详情页（路由 /jnsvote/:id 已接线）
 function goProposalDetail(id: number) {
   router.push(`/jnsvote/${id}`)
 }

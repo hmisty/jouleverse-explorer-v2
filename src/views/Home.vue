@@ -48,45 +48,45 @@
         </div>
       </div>
 
-      <!-- 全网能量（v1 five-value 口径） -->
+      <!-- Timelock 能量信息 -->
       <div class="panel">
         <div class="panel-header">
-          <h2>全网能量</h2>
-          <span class="panel-sub">v1 口径：总释放 = 流通 + 锁定</span>
-        </div>
-        <JvLoading v-if="timelockLoading" label="加载能量数据中..." />
-        <template v-else>
-          <div v-if="energyInvariantBroken.length" class="energy-warning">
-            ⚠️ 链上能量读数不自洽（released ≠ used + available）：{{ energyInvariantBroken.join(' / ') }}。
-            以下数字可能不可信，请核对 Timelock 合约状态。
-          </div>
-          <div v-if="energyBreakdown" class="energy-cards">
-            <!-- Free Energy：主值 = free，副标题 total（v1 main.html:24-29 同构） -->
-            <div class="energy-card">
-              <div class="energy-title">Free Energy<span class="energy-alias">流通能量</span></div>
-              <div class="energy-value">{{ energyDisplay?.free }}</div>
-              <div class="energy-sub">total energy: {{ energyDisplay?.total }}</div>
-            </div>
-            <!-- Reserved Energy：主值 = reserved，副标题 core / eco（v1 main.html:30-38 同构） -->
-            <div class="energy-card">
-              <div class="energy-title">Reserved Energy<span class="energy-alias">锁定能量</span></div>
-              <div class="energy-value">{{ energyDisplay?.reserved }}</div>
-              <div class="energy-sub">{{ energyDisplay?.reservedCore }} (core)</div>
-              <div class="energy-sub">{{ energyDisplay?.reservedEco }} (ecosystem)</div>
-            </div>
-          </div>
-          <JvPageState v-else type="empty" title="暂无能量数据" />
-        </template>
-      </div>
-
-      <!-- Timelock 能量明细（v2 原有，含月度预算速率，不与上面五值口径混用） -->
-      <div class="panel">
-        <div class="panel-header">
-          <h2>Timelock 能量明细</h2>
-          <span class="panel-sub">单实例读数（含月度预算速率）</span>
+          <h2>Timelock 能量信息</h2>
+          <span class="panel-sub">全网合计 = 核心 + 生态</span>
         </div>
         <JvLoading v-if="timelockLoading" label="加载能量数据中..." />
         <div v-else class="timelock-grid">
+          <!--
+            全网合计：补 v1 的 total / free / reserved 语义覆盖。
+            呈现沿用本面板既有卡片样式与 formatEnergy（亿/万/J 自适应），
+            不采用 v1 的「M 单位 + 后拼 J」写法——v1 那种 636M J 单位重复、
+            24,000,000 J 被压成 24M 的呈现是历史将就，不是对等目标。
+          -->
+          <div class="timelock-card timelock-card--agg" v-if="energyBreakdown">
+            <div class="card-title">全网合计</div>
+            <div class="card-stats card-stats--three">
+              <div class="stat-cell">
+                <span class="stat-label">总释放</span>
+                <span class="stat-value">{{ energyAgg?.total }}</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">流通（free）</span>
+                <span class="stat-value">{{ energyAgg?.free }}</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">锁定（reserved）</span>
+                <span class="stat-value">{{ energyAgg?.reserved }}</span>
+              </div>
+            </div>
+            <div class="agg-split">
+              锁定拆分：核心 {{ energyAgg?.reservedCore }} · 生态 {{ energyAgg?.reservedEco }}
+            </div>
+            <div v-if="energyInvariantBroken.length" class="energy-warning">
+              ⚠️ 链上能量读数不自洽（released ≠ used + available）：{{ energyInvariantBroken.join(' / ') }}。
+              上方数字可能不可信，请核对 Timelock 合约状态。
+            </div>
+          </div>
+
           <div class="timelock-card" v-if="timelockCore">
             <div class="card-title">核心时间锁</div>
             <div class="card-stats">
@@ -162,7 +162,7 @@ import { isAddress, formatUnits } from 'viem'
 import type { Block as ViemBlock } from 'viem'
 import { watchBlocks } from 'viem/actions'
 import { formatAge, formatNumber } from '../utils/format'
-import { mergeEnergy, checkEnergyInvariant, formatEnergyM } from '../utils/energy'
+import { mergeEnergy, checkEnergyInvariant } from '../utils/energy'
 import { timelockABI, TIMELOCK_CORE_ADDRESS, TIMELOCK_ECO_ADDRESS } from '../contracts/timelock'
 import type { TimelockData } from '../contracts/timelock'
 import { publicClient, wsPublicClient } from '../config/client'
@@ -216,12 +216,12 @@ const formatEnergy = (num: bigint): string => {
 }
 
 /**
- * v1 五值能量口径（free / total / reserved / reserved_core / reserved_eco）。
+ * 全网五值口径（core + eco 合并）。
  *
- * 与下方 timelockCoreStats / timelockEcoStats 的区别：
- *   - 本块 = v1 对等口径，core+eco 合并后的五值，M 单位；
- *   - 下方两块 = v2 原有的单实例 Timelock 明细（含月度预算），保留供运维查看。
- * 两者语义不同不可互相替代：预算(BUDGET)是速率，不是存量，不能进五值口径。
+ * 与下方 timelockCoreStats / timelockEcoStats 的分工：
+ *   - 本块 = 全网视角，回答「链上一共释放了多少、多少在流通、多少还锁着」；
+ *   - 下方两块 = 单实例明细，含月度预算速率，供运维核对。
+ * 月度预算(BUDGET)是速率而非存量，不进五值口径。
  */
 const energyBreakdown = computed(() => {
   const c = timelockCore.value
@@ -233,7 +233,20 @@ const energyBreakdown = computed(() => {
   )
 })
 
-/** 链上恒等式不自洽的实例名单；非空时 UI 必须显式告警而不是照常展示。 */
+/** 五值的展示串，统一走本文件既有的 formatEnergy（亿/万/J 自适应）。 */
+const energyAgg = computed(() => {
+  const b = energyBreakdown.value
+  if (!b) return null
+  return {
+    total: formatEnergy(b.total),
+    free: formatEnergy(b.free),
+    reserved: formatEnergy(b.reserved),
+    reservedCore: formatEnergy(b.reservedCore),
+    reservedEco: formatEnergy(b.reservedEco),
+  }
+})
+
+/** 链上恒等式不自洽的实例名单；非空时 UI 显式告警而不是照常展示。 */
 const energyInvariantBroken = computed(() => {
   const c = timelockCore.value
   const e = timelockEco.value
@@ -242,25 +255,6 @@ const energyInvariantBroken = computed(() => {
     { used: c.used, released: c.released, available: c.available },
     { used: e.used, released: e.released, available: e.available },
   )
-})
-
-/** v1 首页四宫格（total / free / reserved）＋ 两个 reserved 拆分。 */
-/**
- * v1 首页两卡布局的展示值（v1 `main.html:24-38`）。
- * v1 在数值后直接拼 " J"，而 M 值本身已带 "M"，故 v1 实际显示形如
- * "636M J"——这是 v1 的既有呈现，本实现照抄不修正，避免"顺手美化"
- * 变成非对等。
- */
-const energyDisplay = computed(() => {
-  const b = energyBreakdown.value
-  if (!b) return null
-  return {
-    free: `${formatEnergyM(b.free)} J`,
-    total: `${formatEnergyM(b.total)} J`,
-    reserved: `${formatEnergyM(b.reserved)} J`,
-    reservedCore: `${formatEnergyM(b.reservedCore)} J`,
-    reservedEco: `${formatEnergyM(b.reservedEco)} J`,
-  }
 })
 
 const timelockCoreStats = computed(() => timelockCore.value ? ({
@@ -550,62 +544,6 @@ onUnmounted(() => { unwatchBlocks?.() })
 }
 .link-btn:hover { background: var(--jv-brand-subtle); }
 
-/* ── 全网能量（v1 五值口径） ── */
-.energy-cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-.energy-card {
-  padding: 14px 16px;
-  border: 1px solid var(--jv-border, #e5e7eb);
-  border-radius: 10px;
-  background: var(--jv-surface-2, #fafafa);
-}
-.energy-title {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--jv-text-2, #6b7280);
-}
-.energy-alias {
-  font-size: 11px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  opacity: .6;
-}
-.energy-value {
-  margin-top: 6px;
-  font-size: 22px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.energy-sub {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--jv-text-2, #6b7280);
-  font-variant-numeric: tabular-nums;
-}
-.energy-warning {
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #92400e;
-  background: #fef3c7;
-  border: 1px solid #fcd34d;
-}
-@media (max-width: 720px) {
-  .energy-cards { grid-template-columns: minmax(0, 1fr); }
-}
-
-.panel-sub {
-  font-size: 12px;
-  color: var(--jv-text-2, #6b7280);
-}
-
 /* ── Timelock ── */
 .timelock-grid {
   display: grid;
@@ -648,6 +586,33 @@ onUnmounted(() => { unwatchBlocks?.() })
 .stat-label { color: var(--jv-text-muted); font-size: 0.78rem; }
 .stat-value { color: var(--jv-text-primary); font-size: 0.95rem; font-weight: 600; }
 .stat-value.highlight { color: var(--jv-brand); }
+
+/* 全网合计卡：独占一行，三列 */
+.timelock-card--agg { grid-column: 1 / -1; }
+.card-stats--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.agg-split {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--jv-text-muted);
+}
+.energy-warning {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--jv-radius-md);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+}
+@media (max-width: 720px) {
+  .card-stats--three { grid-template-columns: minmax(0, 1fr); }
+}
+
+.panel-sub {
+  font-size: 0.8rem;
+  color: var(--jv-text-muted);
+}
 
 /* ── Blocks list ── */
 .blocks-list { display: flex; flex-direction: column; gap: 10px; }

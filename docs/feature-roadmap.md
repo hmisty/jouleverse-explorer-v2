@@ -243,14 +243,15 @@
 | 路由可达性门禁加固 | 2026-11-09 审计实测盲区：`route-gap.spec.ts` 只查「有无引用」不查「从入口可达」，删掉路由 + 加一个死模块引用即可全绿放行。改为从 `src/main.ts` + `src/router/*` 做传递闭包 BFS，只有真正可达的视图才不算孤立；新增 2 条反向用例（死模块绕过 / 多级不可达引用链） | ✅ 已合入 | PR #76（6447b43）|
 | 部署基线常量冻结 | 2026-11-09 审计实测盲区：`deployment-verification.spec.ts` 的 reader 默认值取 `baselineBlock.hash` 再喂回被测代码，基线常量本身无守护——把 WJ 摘要末位 `…1e89` 改 `…1e88` 仍 5 passed 全绿。新增 `tests/deployment-baseline-frozen.spec.ts` 3 条，用独立副本冻结三地址摘要 + 基线块号/哈希，改基线必须双改、CR 可见 | ✅ 已合入 | PR #76（6447b43）|
 | 路线图**状态词**一致性 | `tests/roadmap-status.spec.ts` 7 条（真实仓库 1 / 反向 3：未上线却已接线、待审核发布却已接线、已完成但路由不存在 / 正向 3：未上线且未接线、已完成且路由存在、无路由声明不误伤）。判据可执行：登记「待审/未上线」的模块其路由不应出现在 `src/router/index.ts`，「✅ 已完成」的模块声明路由必须真实存在 | ✅ 已合入 | PR #77（444ad6d）|
+| 首页能量口径（v1 five-value 对等）| `src/utils/energy.ts` 抽出 `mergeEnergy` / `checkEnergyInvariant` / `formatEnergyM` / `formatEnergyJ` 四个纯函数；`tests/energy.spec.ts` **15 条**（v1 三值映射 1 / reserved 分项不串味 1 / 先累加后格式化 1 / 全零 1；恒等式 5：双自洽、只报 core、只报 eco、双报、差 1 wei 不容差；M 格式 3：千分位、小数、<1M 不自适应；J 格式 3：三档、整数不带 .00、边界值）。**反证**：free/reserved 对调 → 3 failed（映射 3 条），恒等式放宽 1 wei 容差 → 2 failed，均精确命中、其余不受影响 | ✅ 本 PR |
 | 组件层用例（JNSVote 指南）| `tests/jnsvote-guide.spec.ts` 4 条（非签名人提示中性化 / 签名人无提示 / 步骤区为 `<ol>` 非完成态 / `DECISION_RULE_DISPLAY` 与判据同源）。**注意：这只补了一个组件，`src/components/` 整体仍无门禁**——`check-feature-roadmap.ts` 只扫 `src/views/`、`route-gap.spec.ts` 也只遍历 views，新增组件既不需登记路线图也不需写测试即可三道闸全绿（PR #87 期间实测确认） | ✅ 已合入 | PR #87（1a38ae7）|
 
-**当前基线**（`explorer-v2` 分支 `3a04e94`（#87 合入后），2026-11-16 实测）：`npm run build` EXIT 0 / `vitest run` **276 passed**（23 files）/ `node --test tests/jvaddress.test.ts` **3 passed**（合计 **279** 条）。
+**当前基线**（`explorer-v2` 分支 `402280d`（#88/#90 合入后），2026-11-18 实测）：`npm run build` EXIT 0 / `vitest run` **291 passed**（24 files）/ `node --test tests/jvaddress.test.ts` **3 passed**（合计 **294** 条）。
 
-> 基线演进：13（PR #51~#54 前）→ **22**（PR #56 theme store 9 条）→ **29**（PR #62 gov-pending-ids 7 条）→ **209**（PR #69 路线图检查器 + 之前各批用例）→ **260**（PR #75 前实测，20 files）→ **267**（PR #77 roadmap-status 7 条，21 files）→ **272**（PR #76 路由可达性净增 2 条 + 部署基线冻结 3 条，22 files）→ **276**（PR #87 补 `tests/jnsvote-guide.spec.ts` 4 条，23 files）。
+> 基线演进：13（PR #51~#54 前）→ **22**（PR #56 theme store 9 条）→ **29**（PR #62 gov-pending-ids 7 条）→ **209**（PR #69 路线图检查器 + 之前各批用例）→ **260**（PR #75 前实测，20 files）→ **267**（PR #77 roadmap-status 7 条，21 files）→ **272**（PR #76 路由可达性净增 2 条 + 部署基线冻结 3 条，22 files）→ **276**（PR #87 补 `tests/jnsvote-guide.spec.ts` 4 条，23 files）→ **290**（PR #90 抽出 `revert.ts` 补 `tests/revert-decode.spec.ts` 14 条，24 files）→ **291**（本 PR 补 `tests/energy.spec.ts` 15 条，24 files）。
 > 上表各项现全部为「已合入」。**2026-10-30 这批（#57/#58/#56/#59）与 2026-11-03 这批（#60/#61/#62）均已全部 merge**；#76 与 #77 于 2026-11-13 合入，#87 于 2026-11-15 合入；open PR 仅剩 **#78**（维持不合入，待作者在独立 repo 落地自持地址表/可安装/补 LICENSE）。
 >
-> ⚠️ 计数口径提醒：`npm test` = vitest **276** + node:test 3 = **279 条**。写 PR 描述或文档时别只抄 vitest 数字又说「npm test N passed」——PR #62 描述里写「vitest 22 passed」就是这个错（当时实际已是 29）。
+> ⚠️ 计数口径提醒：`npm test` = vitest **291** + node:test 3 = **294 条**。写 PR 描述或文档时别只抄 vitest 数字又说「npm test N passed」——PR #62 描述里写「vitest 22 passed」就是这个错（当时实际已是 29）。
 > ⚠️ 本基线在 2026-11-03 之后长期未更新（一直写 29 passed），11-10 / 11-11 两次实测发现落后 200+ 条。**凡测试用例数有变化，当次 PR 必须同批更新此行。**
 
 **两条必须记住的规则**：
@@ -375,7 +376,7 @@ src/design-system/
 
 ---
 
-*最后更新：2026-11-16（大白 💎）—— 基线校正：#87（`1a38ae7`）补 `tests/jnsvote-guide.spec.ts` 4 条后用例数已 272 → **276 passed（23 files）**（含 node:test 3 = 279），但该 PR 未按本文件自订规则「用例数变化须同批更新基线」更新本节，故补正；同时登记组件层门禁缺口（`src/components/` 不在任何检查器扫描范围内）。*
+*最后更新：2026-11-18（大白 💎）—— **v1 能量口径落地**（对应 PR #91 对等清单的 P5-1 批次首项）：首页补 v1 five-value 能量口径（Free/Reserved 两卡结构，与 `main.html:24-38` 同构），抽出 `src/utils/energy.ts` 纯函数 + 15 条用例 + 真实链校验脚本 `scripts/smoke-energy.mjs`（实测 released == used + available 在两实例均成立）；基线 276→291（24 files，合计 294）。此前页脚：2026-11-16（大白 💎）基线校正——#87（`1a38ae7`）补 `tests/jnsvote-guide.spec.ts` 4 条后用例数已 272 → **276 passed（23 files）**（含 node:test 3 = 279），但该 PR 未按本文件自订规则「用例数变化须同批更新基线」更新本节，故补正；同时登记组件层门禁缺口（`src/components/` 不在任何检查器扫描范围内）。*
 
 
 ### PR #66 审计补全（2026-11-03）

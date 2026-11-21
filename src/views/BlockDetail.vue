@@ -2,9 +2,10 @@
   <div class="block-detail">
     <div class="header">
       <button @click="$router.push('/')" class="back-btn">← 返回首页</button>
-      <h1 v-if="loading">加载区块 {{ blockNumber }} 中...</h1>
+      <h1 v-if="loading">加载区块 {{ paramLabel }} 中...</h1>
       <h1 v-else-if="block">区块 #{{ block.number }}</h1>
-      <h1 v-else>区块 #{{ blockNumber }} 未找到</h1>
+      <h1 v-else-if="!parsed">区块参数无效</h1>
+      <h1 v-else>区块 {{ paramLabel }} 未找到</h1>
     </div>
 
     <div v-if="block" class="block-info">
@@ -140,11 +141,20 @@
       </div>
     </div>
 
+    <div v-else-if="!loading && !parsed" class="error-section">
+      <JvPageState
+        type="network-error"
+        title="区块参数无效"
+        :description="`「${paramLabel}」既不是区块号，也不是 32 字节区块哈希。`"
+        action="返回首页"
+        @action="$router.push('/')"
+      />
+    </div>
     <div v-else-if="!loading" class="error-section">
       <JvPageState
         type="network-error"
-        :title="`未找到区块 #${blockNumber}`"
-        description="区块数据不存在或加载失败，请检查区块号是否正确。"
+        :title="`未找到区块 ${paramLabel}`"
+        description="区块数据不存在或加载失败，请检查区块号/区块哈希是否正确。"
         action="返回首页"
         @action="$router.push('/')"
       />
@@ -158,6 +168,7 @@ import { useRouter } from 'vue-router'
 import { publicClient } from '../config/client'
 import { formatNumber, formatAge } from '../utils/format'
 import { confirmationCount, decodeHexToText, hasInputData } from '../utils/block-detail'
+import { parseBlockParam, shortBlockParam } from '../utils/block-param'
 import { toolboxContracts } from '../contracts/toolbox'
 import { JvHashText, JvAmount, JvPageState } from '../design-system'
 
@@ -171,7 +182,15 @@ const props = defineProps<Props>()
 
 const block = ref<any>(null)
 const loading = ref(true)
-const blockNumber = ref(props.number)
+
+// v1 的 /#/block/:blockId 同时接受高度与 32 字节哈希（web3.eth.getBlock 语义），
+// 这里按同一规则解析；无法判定时 parsed=null，由视图直接报「参数无效」而不发 RPC。
+const parsed = computed(() => parseBlockParam(props.number))
+const paramLabel = computed(() =>
+  parsed.value?.kind === 'number'
+    ? `#${parsed.value.number.toString()}`
+    : shortBlockParam(props.number),
+)
 
 // 确认数需要「最新高度」，与区块本身是两个独立 RPC。
 // 最新高度拿不到时按 v1 行为显示 0，不让区块页整体失败。
@@ -213,13 +232,19 @@ const viewTransaction = (txHash: string) => router.push(`/tx/${txHash}`)
 
 const loadBlock = async () => {
   loading.value = true
+  const target = parsed.value
+  if (!target) {
+    // 参数既不是高度也不是哈希：不发 RPC，直接进「参数无效」态
+    block.value = null
+    loading.value = false
+    return
+  }
   try {
     // 最新高度与区块内容互不依赖，并行取；确认数失败不拖垮主数据
     const [blockResult, latest] = await Promise.all([
-      publicClient.getBlock({
-        blockNumber: BigInt(props.number),
-        includeTransactions: true,
-      }),
+      target.kind === 'number'
+        ? publicClient.getBlock({ blockNumber: target.number, includeTransactions: true })
+        : publicClient.getBlock({ blockHash: target.hash, includeTransactions: true }),
       publicClient.getBlockNumber().catch(() => null),
     ])
     block.value = blockResult

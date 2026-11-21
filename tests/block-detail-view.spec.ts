@@ -157,3 +157,79 @@ it('区块不存在时给出未找到状态，不渲染确认数', async () => {
   expect(w.text()).toContain('未找到区块')
   expect(w.find('.conf-badge').exists()).toBe(false)
 })
+
+// ── 区块哈希入参（对等 v1 `/#/block/:blockId` 的双入参语义） ──
+// v2 改动前 `BigInt(props.number)` 拿到哈希必抛错 → 「未找到区块」。
+// 交易详情页的「区块哈希」行可点击跳这里，所以这曾是生产死链。
+
+const blockFixture = (over: Record<string, unknown> = {}) => ({
+  number: 90n,
+  hash: `0x${'aa'.repeat(32)}`,
+  parentHash: `0x${'bb'.repeat(32)}`,
+  timestamp: 1_700_000_000n,
+  miner: `0x${'cc'.repeat(20)}`,
+  gasLimit: 30_000_000n,
+  gasUsed: 21_000n,
+  difficulty: 1n,
+  nonce: '0x0000000000000000',
+  size: 512n,
+  extraData: '0x',
+  transactions: [],
+  ...over,
+})
+
+it('🔴 区块哈希入参走 blockHash 查询，不再当高度', async () => {
+  const hash = `0x${'a1'.repeat(32)}`
+  mocks.getBlockNumber.mockResolvedValue(5000n)
+  mocks.getBlock.mockResolvedValue(blockFixture({ hash, number: 4920n }))
+  const w = await mountAt(hash)
+  await flushPromises()
+
+  // 关键：传入的是 blockHash 而不是 blockNumber
+  expect(mocks.getBlock).toHaveBeenCalledWith(expect.objectContaining({ blockHash: hash }))
+  expect(mocks.getBlock.mock.calls[0][0].blockNumber).toBeUndefined()
+  // 标题显示解析出的区块号，而不是那串哈希
+  expect(w.text()).toContain('区块 #4920')
+  expect(w.get('.conf-badge').text()).toBe('80 个区块')
+})
+
+it('裸哈希（无 0x）也能打开，并补齐前缀再查', async () => {
+  const bare = 'a1'.repeat(32)
+  mocks.getBlockNumber.mockResolvedValue(100n)
+  mocks.getBlock.mockResolvedValue(blockFixture())
+  await mountAt(bare)
+  await flushPromises()
+  expect(mocks.getBlock).toHaveBeenCalledWith(
+    expect.objectContaining({ blockHash: `0x${bare}` }),
+  )
+})
+
+it('区块号入参仍走 blockNumber 分支（不回退既有路径）', async () => {
+  mocks.getBlockNumber.mockResolvedValue(5000n)
+  mocks.getBlock.mockResolvedValue(blockFixture())
+  await mountAt('4920')
+  await flushPromises()
+  expect(mocks.getBlock).toHaveBeenCalledWith(
+    expect.objectContaining({ blockNumber: 4920n }),
+  )
+  expect(mocks.getBlock.mock.calls[0][0].blockHash).toBeUndefined()
+})
+
+it('参数既非高度也非哈希 → 报「参数无效」且完全不发 RPC', async () => {
+  const w = await mountAt('hello')
+  await flushPromises()
+  expect(mocks.getBlock).not.toHaveBeenCalled()
+  expect(mocks.getBlockNumber).not.toHaveBeenCalled()
+  expect(w.text()).toContain('区块参数无效')
+})
+
+it('哈希查不到时提示里给出的是哈希摘要，不是「区块 #0x…」', async () => {
+  mocks.getBlockNumber.mockResolvedValue(100n)
+  mocks.getBlock.mockRejectedValue(new Error('block not found'))
+  const hash = `0x${'ee'.repeat(32)}`
+  const w = await mountAt(hash)
+  await flushPromises()
+  expect(w.text()).toContain('未找到区块')
+  // 不出现「区块 #0x」这种把哈希当高度拼出来的措辞
+  expect(w.text()).not.toContain('未找到区块 #0x')
+})

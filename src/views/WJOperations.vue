@@ -28,7 +28,7 @@
       <div v-if="activeTab === 'withdraw'" class="operation-form">
         <div class="form-group">
           <label>目标地址（将 J 释放到此地址）</label>
-          <input v-model="withdrawForm.to" placeholder="0x..." class="form-input">
+          <input v-model="withdrawForm.to" placeholder="0x... 或 域名.j" class="form-input">
         </div>
         <div class="form-group">
           <label>数量 (WJ)</label>
@@ -51,7 +51,7 @@
       <div v-if="activeTab === 'transfer'" class="operation-form">
         <div class="form-group">
           <label>接收地址</label>
-          <input v-model="transferForm.to" placeholder="0x..." class="form-input">
+          <input v-model="transferForm.to" placeholder="0x... / JVA B32 / 域名.j" class="form-input">
         </div>
         <div class="form-group">
           <label>数量 (WJ)</label>
@@ -76,12 +76,16 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { parseEther } from 'viem'
 import { useWalletStore } from '../stores/wallet'
 import { WJ_ADDRESS, wjABI } from '../contracts/wj'
+import { JNS_ADDRESS, jnsABI } from '../contracts/jns'
+import { publicClient } from '../config/client'
+import { makeJnsLookup } from '../utils/recipient-resolve'
 import { jouleverseChain } from '../config/chain'
 import { JvPageState, JvActionButton } from '../design-system'
 import { safeErrorMessage } from '../utils/error'
+import { checkWjAmount } from '../utils/wj-amount'
+import { resolveRecipient } from '../utils/recipient-resolve'
 
 interface Props {
   address: string
@@ -92,6 +96,9 @@ interface Props {
 
 const props = defineProps<Props>()
 const walletStore = useWalletStore()
+
+// `.j` 域名解析：v1 在「发送 wJ」里支持，靠 _nslookup → _bound 两步
+const jnsLookup = makeJnsLookup(publicClient, JNS_ADDRESS, jnsABI)
 
 const activeTab = ref<'withdraw' | 'transfer'>('withdraw')
 const loadingOperation = ref(false)
@@ -115,10 +122,13 @@ const handleWithdraw = async () => {
   operationError.value = null
   operationSuccess.value = null
   try {
-    const to = withdrawForm.value.to
-    const amountStr = String(withdrawForm.value.amount || '0')
-    if (!/^\d*\.?\d+$/.test(amountStr) && amountStr !== '0') throw new Error(`无效的数量: "${amountStr}"`)
-    const amount = parseEther(amountStr)
+    const amountCheck = checkWjAmount(withdrawForm.value.amount, 'withdraw', props.wjBalance)
+    if (!amountCheck.ok) { operationError.value = amountCheck.message; loadingOperation.value = false; return }
+    const amount = amountCheck.wei
+
+    const target = await resolveRecipient(withdrawForm.value.to, jnsLookup)
+    if (!target.ok) { operationError.value = target.message; loadingOperation.value = false; return }
+    const to = target.address
     const { writeContract, switchChain } = await import('wagmi/actions')
     const { config: wagmiConfig } = await import('../stores/wallet')
     try { await switchChain(wagmiConfig, { chainId: jouleverseChain.id }) } catch {
@@ -141,10 +151,13 @@ const handleTransfer = async () => {
   operationError.value = null
   operationSuccess.value = null
   try {
-    const to = transferForm.value.to
-    const amountStr = String(transferForm.value.amount || '0')
-    if (!/^\d*\.?\d+$/.test(amountStr) && amountStr !== '0') throw new Error(`无效的数量: "${amountStr}"`)
-    const amount = parseEther(amountStr)
+    const amountCheck = checkWjAmount(transferForm.value.amount, 'transfer', props.wjBalance)
+    if (!amountCheck.ok) { operationError.value = amountCheck.message; loadingOperation.value = false; return }
+    const amount = amountCheck.wei
+
+    const target = await resolveRecipient(transferForm.value.to, jnsLookup)
+    if (!target.ok) { operationError.value = target.message; loadingOperation.value = false; return }
+    const to = target.address
     const { writeContract, switchChain } = await import('wagmi/actions')
     const { config: wagmiConfig } = await import('../stores/wallet')
     try { await switchChain(wagmiConfig, { chainId: jouleverseChain.id }) } catch {

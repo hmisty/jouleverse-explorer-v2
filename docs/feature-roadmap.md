@@ -184,7 +184,7 @@
 | 批次 | 内容 | 预估 | 状态 |
 |---|---|---|---|
 | **P5-1 浏览基础对等** | ~~首页 Free/Reserved Energy 四宫格~~（⛔ 撤销，见下）、一键添加主网（EIP-3085）、全局搜索补全（五类输入 + 帮助弹层）、区块详情（确认数 + extraData + 交易输入数据）、交易详情（区块哈希 + **ABI 解码切换** + 地址标签 + gasPrice 双单位） | 1.5–2 天 | 🟡 进行中 |
-| **P5-2 地址页对等** | 资产面板补 Planet / FlyingJ / JNSDAO V（含 npub）/ CryptoJunks 墙；「新手加油 0.005 J」；WJ 发送与 JNS 转移支持 `.j` 解析 | 1.5–2 天 | ⏳ 待开工 |
+| **P5-2 地址页对等** | 资产面板补 Planet / FlyingJ / JNSDAO V（含 npub）/ CryptoJunks 墙；「新手加油 0.005 J」；WJ 发送与 JNS 转移支持 `.j` 解析 | 1.5–2 天 | 🟡 进行中（`.j` 解析 + WJ 边界已交付；资产 4 类 + 新手加油待做） |
 | **P5-3 JNS 对等** | `/#/did/:name` DID 页；打赏 endorse（1/2/5/10 + 手动 ≤100 WJ）；owner-only mint 入口 | 1–1.5 天 | ⏳ 待开工 |
 | **P5-4 CryptoJunks** | 全量浏览页：supply 状态 / 分页（100 一页）/ 铭文墙 / 标注说明 / 静态统计表 | 1–1.5 天 | ⏳ 待开工 |
 | **P5-5 链上红包** | 创建（总额 ≤2000 WJ、≤500 个、WJ 授权）+ 红包信息 + 抢（幸运数字 + JTI 资格）+ 复制 | 1.5–2 天 | ⏳ 待开工 |
@@ -206,6 +206,26 @@
 - ⛔ 首页能量合计**撤销**（PR #92 已关闭）——`used` ≠ 流通、`available` ≠ 锁中，v1 语义站不住
 - ⏳ 一键添加主网（EIP-3085）
 - ⏳ 交易详情：区块哈希行 / ABI 解码切换 / 地址标签 / 双单位
+
+**P5-2 已完成项（2026-11-22）**：
+
+- ✅ 接收方 `.j` 域名解析（`src/utils/recipient-resolve.ts`）——v1 在两处都支持
+  （`addressInfoController.js:200` 发送 wJ、`jnsInfoController.js:125` 赠予 JNS 域名），
+  逻辑相同：`.j` 后缀 → `_nslookup` 拿 tokenId → `_bound` 拿绑定地址。
+  v2 三处入口（WJ 释放 / WJ 转账 / 域名转移）全部接入，纯函数 + 注入式链上查询。
+  - **刻意纠正 v1 的归因错误**：v1 把「RPC 读取失败」与「域名不存在」并成同一句「无效的JNS域名」，
+    用户会去别的浏览器反复确认一个其实存在的域名。现分成 `jns-not-found` / `jns-unbound` /
+    `jns-read-failed` 三种，失败文案显式写「这不代表域名不存在」。
+  - `.j` 判定**先于**地址判定并写进注释：以 `.j` 结尾的 40 位 `j3` 串在两个集合里都「像」，
+    顺序写反会静默走错分支（同 11-20 搜索框 `/^\d+$/` 抢走 40 位全数字地址那次的教训）。
+- ✅ WJ 操作数量与接收方校验（`src/utils/wj-amount.ts`）——v1 有、v2 **一条都没做**：
+  - 释放 J：`0 < amt < 100`（**严格小于**），v1 原文提示「大额释放请用合约工具进行，慎重操作！」
+  - 发送 WJ：`0 < amt ≤ 2000`（**含等于**）
+  - 两条边界的等号方向不同是 v1 原样，**不统一**——统一等于放宽其中一条，而对等清单要求「不放宽」
+  - 余额校验：释放是 `amt < balance`（严格），转账是 `amt ≤ balance`
+  - `checkBalance=false` 只跳过余额校验、**不豁免上限**（上限是产品边界，不能被一个勾选框绕过）
+- ⏳ 资产面板补 4 类（Planet / FlyingJ / JNSDAO V / CryptoJunks 墙）
+- ⏳ 「新手加油 0.005 J」入口（余额 0 且有 JTI2 时）
 
 **每批硬性门禁**：`npm run build` EXIT 0（非 `vue-tsc --noEmit`）/ `npm test` 全绿 / `check-feature-roadmap.ts` 通过 / 新增纯逻辑配 spec 且做反向验证 / 真实链验证记录进 PR / 有 UI 改动做双主题验证。
 
@@ -291,12 +311,12 @@
 | 全局搜索输入解析 | `tests/search-resolve.spec.ts` 30 条（JNS/HEX/B32/交易/区块号五类 + 无法识别 + 帮助示例自校验）。抽自 `Home.vue handleSearch` 内联分支，改为 `src/utils/search-resolve.ts` 纯函数。修了两个真 bug：① 40 位全数字地址被 `/^\d+$/` 抢走当区块号；② 无法识别时静默 `push('/block/<乱码>')` | ✅ 已合入 | PR #95 |
 | **交易详情四项对等** | 按 `docs/v1-parity-checklist.md` §2.3·C 补 v1 的四个字段：① 区块哈希行（`receipt.blockHash ?? tx.blockHash`，可点进区块页）② 地址标签（`src/utils/address-label.ts`，复用 `toolbox.ts` 12 合约注册表，11 条用例含大小写/空白/未注册不误判）③ ABI 解码切换（`src/utils/abi-decode.ts`，按 4 字节选择器索引 12 份 ABI 后 `viem.decodeFunctionData`，14 条用例含碰撞兜底与解不出返回 null）④ 双单位 Gas 价格与手续费（`src/utils/amount-dual.ts`，`1 J = 1e9 Gwei`，21 条用例含 2^53 精度边界）。另 `src/utils/add-chain.ts` 一键添加主网（EIP-3085 + EIP-3326，切换优先失败再添加，20 条用例覆盖 4902/4001/无钱包） | 🟡 待合入 | 本 PR |
 | **测试基线一致性门禁** | 治「基线腐烂」第三次复发：`docs/feature-roadmap.md` 的用例数**从未绑定任何会失败的检查**，靠自觉维护，于是 11-10 落后 231 条 / 11-11 落后 238 条 / 11-16 落后 4 条。新增 `scripts/check-test-baseline.ts`：实跑 vitest（JSON reporter）+ node:test（TAP reporter），把 vitest passed / files、node:test passed、合计、以及「计数口径提醒」行的三个数字逐项与文档比对，任一不等即 EXIT 1；测试自身有失败也拒绝给绿灯；文档自身不自洽（合计 ≠ 两项之和）同样拦。配套 `tests/test-baseline-gate.spec.ts` 15 条（正向 3 / 解析失败负向 4 / 数字不符负向 6 / 产物格式负向 2） | ✅ 已合入 | 本 PR |
-**当前基线**（`explorer-v2` 分支 `02c7563`（#89 合入后），2026-11-20 实测）：`npm run build` EXIT 0 / `vitest run` **427 passed**（32 files）/ `node --test tests/jvaddress.test.ts` **3 passed**（合计 **430** 条）。
+**当前基线**（`explorer-v2` 分支 `c216a60`（#98 合入后），2026-11-22 实测）：`npm run build` EXIT 0 / `vitest run` **476 passed**（35 files）/ `node --test tests/jvaddress.test.ts` **3 passed**（合计 **479** 条）。
 
 > 基线演进：13（PR #51~#54 前）→ **22**（PR #56 theme store 9 条）→ **29**（PR #62 gov-pending-ids 7 条）→ **209**（PR #69 路线图检查器 + 之前各批用例）→ **260**（PR #75 前实测，20 files）→ **267**（PR #77 roadmap-status 7 条，21 files）→ **272**（PR #76 路由可达性净增 2 条 + 部署基线冻结 3 条，22 files）→ **276**（PR #87 补 `tests/jnsvote-guide.spec.ts` 4 条，23 files）→ **290**（`tests/revert-decode.spec.ts` 14 条，24 files）→ **314**（区块详情页对等：`tests/block-detail.spec.ts` 18 条 + `tests/block-detail-view.spec.ts` 6 条，26 files）→ **344**（全局搜索输入解析：`tests/search-resolve.spec.ts` 30 条，27 files）→ **359**（基线门禁 `tests/test-baseline-gate.spec.ts` 15 条，28 files）→ **427**（交易详情四项对等 + 一键添加主网：`tests/address-label.spec.ts` 11 + `tests/abi-decode.spec.ts` 14 + `tests/amount-dual.spec.ts` 21 + `tests/add-chain.spec.ts` 22，32 files）。
 > 上表各项现全部为「已合入」。**2026-10-30 这批（#57/#58/#56/#59）与 2026-11-03 这批（#60/#61/#62）均已全部 merge**；#76 与 #77 于 2026-11-13 合入，#87 于 2026-11-15 合入，#90/#91/#93/#94/#95 于 2026-11-20 合入；open PR 仅剩 **#78**（维持不合入，待作者在独立 repo 落地自持地址表/可安装/补 LICENSE）。
 >
-> ⚠️ 计数口径提醒：`npm test` = vitest **427** + node:test 3 = **430 条**。写 PR 描述或文档时别只抄 vitest 数字又说「npm test N passed」——PR #62 描述里写「vitest 22 passed」就是这个错（当时实际已是 29）。
+> ⚠️ 计数口径提醒：`npm test` = vitest **476** + node:test 3 = **479 条**。写 PR 描述或文档时别只抄 vitest 数字又说「npm test N passed」——PR #62 描述里写「vitest 22 passed」就是这个错（当时实际已是 29）。
 > ✅ **本行已由 `scripts/check-test-baseline.ts` 强制守护**（2026-11-16 起）。此前它无任何会失败的检查绑定，只能靠自觉，先后腐烂三次（11-10 落后 231 条、11-11 落后 238 条、11-16 落后 4 条）。现规则有牙齿：数字不符 CI 直接红，`npm run check:baseline` 本地可复现。
 
 **两条必须记住的规则**：
@@ -444,3 +464,14 @@ src/design-system/
 ### PR #66 审计补全（2026-11-03）
 
 新增两个只读目录已登记到 §一；本分支共 18 个视图、模块编号 1–31。覆盖度脚本改为按表头/自检标记提取，避免固定行号漏掉新增行；`tests/feature-roadmap.spec.ts` 自动检查视图覆盖、重复/跳号和自检数字。编号仅对应本分支，#65/#67 等并行 PR 合入时须保留条目并按主线末尾顺延，同步实际视图数。检查点名单仅代表该高度的节点响应快照，不代表实时授权集合、节点在线、seal 已验证或逐块出块者。
+
+*最后更新：2026-11-22（大白 💎）—— 转入 **P5-2 地址页对等**，首批交付两项且都属「v1 有、v2 完全没有」的口子：
+①**接收方 `.j` 域名解析**（`src/utils/recipient-resolve.ts`，三处写链路全接入）——v1 在发送 wJ 与赠予 JNS 两处都支持，
+且两处逐行同构；顺带纠正 v1 把「读取失败」说成「域名不存在」的归因错误；
+②**WJ 操作数量与接收方校验**（`src/utils/wj-amount.ts`）——v1 的 `0<amt<100`（释放）与 `0<amt≤2000`（转账）两条边界
+v2 一条都没做，输入框只过滤非数字字符就把 `parseEther` 结果发上链。
+新增 49 条用例（recipient-resolve 24 / wj-amount 20 / 真实链 5），基线 427 → **476 passed（35 files）**，含 node:test 3 = 479。
+反向注入 6 组均部分红：抹平两条上限的等号方向 → 2 failed；余额改回 Number 比较 → 1 failed（正是「释放恰好等于余额」那条）；
+`checkBalance=false` 顺便豁免上限 → 1 failed；`jns-read-failed` 并回「不存在」→ 1 failed；`_bound` 入参改成名字 → 1 failed；
+`.j` 判定整体禁用 → 10 failed。真实链锚点 `btcddd.j`（tokenId=820，bound `0x58CCe35c…`）：`_nslookup`→`_bound` 两步解析一致、
+大小写两种写法归一到同一地址、不存在的域名给出 `jns-not-found` 而非 `read-failed`、地址输入零 RPC。*

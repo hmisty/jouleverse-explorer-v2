@@ -197,13 +197,13 @@
           </div>
           <div v-if="transferError" class="op-msg-error">{{ transferError }}</div>
           <div class="op-hint">
-            <p>输入接收方的地址（支持 HEX 或 JVA B32 格式）</p>
+            <p>输入接收方地址（HEX / JVA B32）或 .j 域名</p>
           </div>
           <div class="op-input-row">
             <input
               v-model="transferAddress"
               type="text"
-              placeholder="例如: j3qz9... 或 0x..."
+              placeholder="例如: 0x... / j3qz9... / 域名.j"
               class="op-input"
               :disabled="transferLoading"
             />
@@ -287,7 +287,7 @@ import { JNS_ADDRESS, jnsABI } from '@/contracts/jns'
 import { fetchJnsHoldingBatch } from '@/utils/jns-holdings'
 import { jouleverseChain } from '@/config/chain'
 import { useWalletStore } from '@/stores/wallet'
-import { detectAddressFormat, decodeJVA } from '@/utils/jvaddress'
+import { resolveRecipient, makeJnsLookup } from '@/utils/recipient-resolve'
 import { config as wagmiConfig } from '@/stores/wallet'
 import { JvActionButton, JvHashText, JvPageState, JvLoading } from '../design-system'
 
@@ -299,6 +299,9 @@ const walletStore = useWalletStore()
 const publicClient = createPublicClient({
   transport: http(jouleverseChain.rpcUrls.default.http[0]),
 })
+
+// `.j` 接收方解析（v1 jnsInfoController.js:125 赠予域名同样支持 .j 域名）
+const jnsLookup = makeJnsLookup(publicClient, JNS_ADDRESS as `0x${string}`, jnsABI)
 
 // ===== 搜索状态 =====
 const searchQuery = ref('')
@@ -430,23 +433,16 @@ const refreshDomain = async () => {
 /** 转移 JNS 域名到指定地址 */
 const transferJnsDomain = async () => {
   if (!domainInfo.value || !transferAddress.value) return
-  const rawAddr = transferAddress.value.trim()
-  
-  // 地址格式检测：支持 hex / B32 / full JVA
-  const format = detectAddressFormat(rawAddr)
-  let toHex: string | null = null
-  if (format === 'hex') toHex = rawAddr
-  else if (format === 'b32' || format === 'full') {
-    const decoded = decodeJVA(rawAddr)
-    if (decoded.success) toHex = decoded.hexAddress
-    else { transferError.value = 'B32 地址格式无效'; return }
-  } else { transferError.value = '请输入有效的地址(HEX 或 JVA B32 格式)'; return }
-  
-  if (!toHex || !walletStore.address) return
+  if (!walletStore.address) return
   transferError.value = ''
   operationError.value = ''
   operationSuccess.value = ''
+
+  // 接收方：hex / B32 / full JVA / `.j` 域名（v1 jnsInfoController.js:125 同样支持 .j）
   transferLoading.value = true
+  const target = await resolveRecipient(transferAddress.value, jnsLookup)
+  if (!target.ok) { transferError.value = target.message; transferLoading.value = false; return }
+  const toHex = target.address as string
   try {
     const { writeContract, switchChain } = await import('wagmi/actions')
     try { await switchChain(wagmiConfig, { chainId: 3666 }) } catch {}

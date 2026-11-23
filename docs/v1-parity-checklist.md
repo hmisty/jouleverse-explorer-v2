@@ -285,9 +285,10 @@ v1 的路由表里只有 14 条，v2 现有 **22 个视图**。多出来的部�
 8. 区块详情支持区块哈希入参（v1 `/#/block/:blockId` 同时接受高度和哈希）
 
 ### C. 地址页资产与操作（P5-6 ~ P5-8）
-9. 资产面板补齐 **4 类**：Planet、FlyingJ、JNSDAO V（含 npub 展示）、CryptoJunks 墙（现有 7 类 → 11 类）。⚠️ 加完后记得同步 `KIND_ORDER` 与 `useCoreAssets` 的分批保护
-10. 「新手加油 0.005 J」入口（余额 0 且有 JTI2 时）
-11. WJ 发送 / JNS 转移支持 `.j` 域名解析（v1 两处都有）
+9. ✅ 资产面板补齐 **4 类**：Planet、FlyingJ、JNSDAO V（含 npub 展示）、CryptoJunks 墙（7 类 → **11 类**）。
+   顺带修正 JTI 地址：v1 `addressInfo.html:83` 显示 `countJTI2`，V1 那行已被注释 → 面板必须指 **V2**（`0x7e72…`）。
+10. ✅ 「新手加油 0.005 J」入口（已连接 + 该地址余额 **== 0** + 持有 JTI2；走 `withdrawTo` 且跳过加油者 WJ 余额校验）
+11. ✅ WJ 发送 / JNS 转移支持 `.j` 域名解析（PR #100）
 
 ### D. JNS（P5-9 ~ P5-11）
 12. DID 页 `/#/did/:jnsId`（复用地址视图，按域名反查地址）

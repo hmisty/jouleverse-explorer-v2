@@ -10,6 +10,10 @@ import iconPopbadge from '../assets/icons/asset-popbadge.svg'
 import iconCoreid from '../assets/icons/asset-coreid.svg'
 import iconJti from '../assets/icons/asset-jti.svg'
 import iconJnsvote from '../assets/icons/asset-jnsvote.svg'
+import iconPlanet from '../assets/icons/asset-planet.svg'
+import iconFlyingj from '../assets/icons/asset-flyingj.svg'
+import iconJnsdaov from '../assets/icons/asset-jnsdaov.svg'
+import iconCryptojunks from '../assets/icons/asset-cryptojunks.svg'
 
 export type AssetKind = 'native' | 'erc20' | 'erc721'
 
@@ -77,11 +81,16 @@ export const CORE_ASSETS: CoreAsset[] = [
     icon: iconCoreid,
   },
   {
+    // ⚠️ 指向 JTI **V2**（0x7e72…），不是 V1（0x8269…）。
+    // 判据：v1 地址页 `addressInfo.html:83` 显示的是 `countJTI2`（JTI(v2)），
+    // V1 那行在同一文件里被 `<!-- -->` 注释掉了（L84）。此处曾误配 V1，
+    // 导致「只持有 JTI v2」的地址在本面板显示 0 个 —— 已实测：v2 最新 3 个
+    // 持有人的 V1 balanceOf 全为 0，而 V2 各为 1，两者持有人集合不同。
     key: 'jti',
     name: 'JTI 认证标识',
     symbol: 'JTI',
     kind: 'erc721',
-    address: '0x826971d988d7d86Fdc9062A3f63E7b18D32Bc8EB',
+    address: '0x7e722837Ff19BE2687c2089DBf70D064fB9622AE',
     enumerable: true,
     icon: iconJti,
   },
@@ -93,6 +102,46 @@ export const CORE_ASSETS: CoreAsset[] = [
     address: '0xEf1f38e95dd7F4FB564535F9317ecB3Bd419DA50',
     enumerable: true,
     icon: iconJnsvote,
+  },
+  {
+    key: 'planet',
+    name: 'Planet 星球',
+    symbol: 'Planet',
+    kind: 'erc721',
+    address: '0x9c100856f5C60a3ec87Aa408567304DB2AfC241F',
+    enumerable: true,
+    icon: iconPlanet,
+  },
+  {
+    key: 'flyingj',
+    name: 'Flying J',
+    symbol: 'FLYING-J',
+    kind: 'erc721',
+    address: '0x045B997B5E05DF9795985aB9e6720d94557255BE',
+    enumerable: true,
+    icon: iconFlyingj,
+  },
+  {
+    key: 'jnsdaov',
+    name: 'JNSDAO V',
+    symbol: 'JNSDAO-V',
+    kind: 'erc721',
+    address: '0x9F57e77585E05CA7Def98f3171F448Fc8eb13A83',
+    // ⚠️ 不能走 tokenOfOwnerByIndex 面板：JNSDAO V 的唯一查询入口是
+    // `query(address) → tokenURI 字符串`，且**对无徽章地址直接 revert**
+    // （实测 0x9c100856… 调用报 "Execution reverted"，不是返回空串）。
+    // 故 enumerable=false，改由 query 面板处理 revert → 「未持有」。
+    enumerable: false,
+    icon: iconJnsdaov,
+  },
+  {
+    key: 'cryptojunks',
+    name: 'CryptoJunks',
+    symbol: 'JUNK',
+    kind: 'erc721',
+    address: '0x1b1d15726d64c5027b627138f2bf051cc1EF2680',
+    enumerable: true,
+    icon: iconCryptojunks,
   },
 ] as const
 

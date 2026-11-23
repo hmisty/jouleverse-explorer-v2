@@ -53,6 +53,25 @@ const zhHans = {
   tenThousand: '万',
   hundredMillion: '亿',
   countUnit: '个',
+  // ── 新手加油（v1 对等，0.005 J）──
+  // 0.005 J 写死在文案里（与 utils/newbie-gas.ts 的 NEWBIE_GAS_AMOUNT_J 一致，有单测对账）
+  newbieGasHint: '该地址持有 JTI 徽章但余额为 0，可从你的 WJ 释放 0.005 J 为它支付 gas。',
+  newbieGasAction: '新手加油',
+  newbieGasNoWallet: '请先连接钱包',
+  newbieGasWrongChain: '请先在钱包中手动切换到 Jouleverse 网络（Chain ID: 3666，RPC: https://rpc.jnsdao.com）',
+  newbieGasSuccess: '已为新手加油！交易哈希: {hash}...',
+  newbieGasFailed: '加油失败: {err}',
+  // ── JNSDAO V（query 面板）──
+  jnsdaovDetail: 'JNSDAO V 徽章',
+  jnsdaovError: '徽章读取失败：{err}',
+  jnsdaovParseFailed: '徽章元数据格式无法解析',
+  jnsdaovUnnamed: 'JNSDAO V（元数据无名称）',
+  jnsdaovNoNpub: '该徽章元数据未登记 nostr 公钥',
+  // ── CryptoJunks 墙（v1 金标 + 稀有度标记）──
+  junkWallTitle: 'CryptoJunks',
+  junkRefMissing: '参照表未加载：金标/稀有度暂时不显示（不代表没有）',
+  junkImageFailed: '读取失败',
+  junkGoldenLabel: '金标 {mark}',
   enumReadFailed: '(读取失败)',
   enumMetadataFailed: '（元数据读取失败）',
 }

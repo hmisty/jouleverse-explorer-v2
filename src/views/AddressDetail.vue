@@ -90,10 +90,28 @@
         </div>
       </div>
 
-      <!-- 资产（配置驱动统一视图：J / WJ / NFT 余额 + JNS 明细） -->
+      <!-- 资产（配置驱动统一视图：J / WJ / NFT 余额 + JNS 明细 + JNSDAO V） -->
       <div class="panel">
         <h2>💼 资产</h2>
-        <CoreAssetsPanel :address="hexAddress" @wj-balance="wjBalance = $event" />
+        <CoreAssetsPanel
+          :address="hexAddress"
+          @wj-balance="wjBalance = $event"
+          @balances="onAssetBalances"
+        />
+
+        <!-- 新手加油（v1 addressInfo.html:58-61 同条件：已连接 + 余额 0 + 持有 JTI(v2)） -->
+        <div v-if="newbieGas.show" class="newbie-gas">
+          <p class="newbie-gas-hint">{{ t('newbieGasHint') }}</p>
+          <JvActionButton
+            :loading="newbieGasLoading"
+            :disabled="newbieGasLoading"
+            @click="handleNewbieGas"
+          >
+            ⛽ {{ t('newbieGasAction') }} {{ NEWBIE_GAS_AMOUNT_J }} J
+          </JvActionButton>
+          <p v-if="newbieGasError" class="error-message">{{ newbieGasError }}</p>
+          <p v-if="newbieGasSuccess" class="success-message">{{ newbieGasSuccess }}</p>
+        </div>
       </div>
 
       <!-- WJ 信息 -->
@@ -180,17 +198,22 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { formatEther } from 'viem'
+import { formatEther, parseEther } from 'viem'
 import { formatAddress } from '../utils/format'
-import { WJ_ADDRESS } from '../contracts/wj'
+import { safeErrorMessage } from '../utils/error'
+import { WJ_ADDRESS, wjABI } from '../contracts/wj'
+import { jouleverseChain } from '../config/chain'
 import { JNS_ADDRESS, jnsABI } from '../contracts/jns'
 import CoreAssetsPanel from '../components/CoreAssetsPanel.vue'
 import WJOperations from './WJOperations.vue'
 import CoreIdSection from './CoreIdSection.vue'
 import { publicClient } from '../config/client'
 import { encodeJVA, detectAddressFormat, normalizeToHex } from '../utils/jvaddress'
-import { JvLoading, JvPageState, JvHashText } from '../design-system'
+import { JvLoading, JvPageState, JvHashText, JvActionButton } from '../design-system'
 import { initTimeCache, getYearBlockRange, getAvailableYears, getAvgBlockTime } from '../utils/timestamp-to-block'
+import { decideNewbieGas, NEWBIE_GAS_AMOUNT_J } from '../utils/newbie-gas'
+import { useWalletStore } from '../stores/wallet'
+import { t } from '../i18n'
 
 const router = useRouter()
 
@@ -221,6 +244,73 @@ const jnsName = ref<string | null>(null)
 // WJ 余额：由 CoreAssetsPanel 统一读取后通过 @wj-balance 事件回传，
 // 消除此处与 useCoreAssets 的重复 balanceOf 读取
 const wjBalance = ref<bigint | null>(null)
+
+// ── 新手加油（P5-2）──
+// 三个输入都来自「页面地址」而非「连接的钱包地址」：v1 判的是被查看地址的余额与徽章，
+// 加油的人（连接的钱包）可以是任意地址——这也是 v1 刻意 checkBalance=false 的原因。
+const walletStore = useWalletStore()
+const nativeBalance = ref<bigint | null>(null)
+const jtiBalance = ref<bigint | null>(null)
+const newbieGasLoading = ref(false)
+const newbieGasError = ref<string | null>(null)
+const newbieGasSuccess = ref<string | null>(null)
+
+/** CoreAssetsPanel 首屏 multicall 结果回传（原生 J + JTI 余额），避免再打一轮 RPC */
+function onAssetBalances(payload: { native: bigint | null; jti: bigint | null }) {
+  nativeBalance.value = payload.native
+  jtiBalance.value = payload.jti
+}
+
+const newbieGas = computed(() =>
+  decideNewbieGas({
+    nativeBalance: nativeBalance.value,
+    jtiBalance: jtiBalance.value,
+    connectedAccount: walletStore.address,
+  }),
+)
+
+const handleNewbieGas = async () => {
+  if (!walletStore.address) { newbieGasError.value = t('newbieGasNoWallet'); return }
+  newbieGasLoading.value = true
+  newbieGasError.value = null
+  newbieGasSuccess.value = null
+  try {
+    const amount = parseEther(NEWBIE_GAS_AMOUNT_J)
+    const { writeContract, switchChain } = await import('wagmi/actions')
+    const { config: wagmiConfig } = await import('../stores/wallet')
+    try {
+      await switchChain(wagmiConfig, { chainId: jouleverseChain.id })
+    } catch {
+      newbieGasError.value = t('newbieGasWrongChain')
+      return
+    }
+    // withdrawTo 把 WJ 释放成原生 J 给目标地址：加油者出自己的 WJ，受助者拿到 gas
+    const hash = await writeContract(wagmiConfig, {
+      address: WJ_ADDRESS,
+      abi: wjABI,
+      functionName: 'withdrawTo',
+      args: [hexAddress.value as `0x${string}`, amount],
+    })
+    newbieGasSuccess.value = t('newbieGasSuccess', { hash: hash.slice(0, 10) })
+    await walletStore.refreshBalances()
+    // 加油后页面地址余额已变（除非出块前刷新），重新读一次让按钮消失
+    await refreshBalancesAfterGas()
+  } catch (e) {
+    newbieGasError.value = t('newbieGasFailed', { err: safeErrorMessage(e) })
+  } finally {
+    newbieGasLoading.value = false
+  }
+}
+
+/** 加油成功后重读该地址余额，避免按钮继续显示（余额仍是旧值 0n） */
+async function refreshBalancesAfterGas() {
+  try {
+    const bal = await publicClient.getBalance({ address: hexAddress.value as `0x${string}` })
+    nativeBalance.value = bal
+  } catch {
+    // 读失败就保持旧值：下一次地址切换/刷新会纠正，不在这里把余额写成 0
+  }
+}
 
 // 世代号：地址切换时作废在途请求，避免「B 的地址 + A 的余额」这类过期响应回写。
 let loadSeq = 0
@@ -444,6 +534,12 @@ function reloadAddressData() {
   const seq = ++loadSeq
   jnsName.value = null
   wjBalance.value = null
+  // 新手加油的输入属于「当前地址」，切地址必须清空，
+  // 否则会短暂用上一个地址的余额决定是否显示按钮（比不显示更糟：可能转错人）
+  nativeBalance.value = null
+  jtiBalance.value = null
+  newbieGasError.value = null
+  newbieGasSuccess.value = null
   transactions.value = []
   totalTxs.value = 0
   currentYear.value = new Date().getFullYear()
@@ -522,6 +618,21 @@ function reloadAddressData() {
   word-break: break-all;
   text-align: right;
 }
+
+/* ── 新手加油 ── */
+.newbie-gas {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--jv-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.newbie-gas-hint { margin: 0; font-size: 0.85rem; color: var(--jv-text-secondary); }
+
+.newbie-gas .success-message { color: var(--jv-success); font-size: 0.85rem; margin: 0; }
+.newbie-gas .error-message { color: var(--jv-error); font-size: 0.85rem; margin: 0; }
 
 .muted { color: var(--jv-text-muted); font-size: 0.85rem; }
 

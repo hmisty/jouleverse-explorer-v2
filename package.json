@@ -11,12 +11,14 @@
     "smoke": "node scripts/smoke-jnsvote.mjs",
     "smoke:jns": "node scripts/smoke-jns-domains.mjs",
     "smoke:core-assets": "node scripts/smoke-core-assets.mjs",
+    "smoke:p5-2": "node scripts/smoke-p5-2-assets.mjs",
     "test:jvaddress": "node --test tests/jvaddress.test.ts",
     "smoke:proposal-detail": "node scripts/smoke-jnsvote-proposal-detail.mjs",
     "check:roadmap": "node scripts/check-feature-roadmap.ts",
     "check:baseline": "node scripts/check-test-baseline.ts --run"
   },
   "dependencies": {
+    "@scure/base": "~1.2.6",
     "@wagmi/connectors": "^8.0.0",
     "@wagmi/core": "^3.4.1",
     "ethers": "^6.17.0",

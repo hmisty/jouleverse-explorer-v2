@@ -25,6 +25,10 @@
     <!-- 错误提示 -->
     <JvPageState v-if="error" type="search-empty" :description="error" />
 
+    <!-- owner-only mint：v1 只在「域名不存在 + 本链 + 本人是合约 owner」时显示 🔨。
+         ⚠️ 必须放在 domainInfo 块之外 —— 域名存在时 mint 没有意义，放在里面就永远看不见。 -->
+    <JnsMintPanel v-if="showMintPanel" @minted="onMinted" />
+
     <!-- ===== 域名信息 ===== -->
     <div v-if="domainInfo" class="domain-info">
       <!-- 域名卡片 -->
@@ -121,6 +125,23 @@
         <JvActionButton v-if="domainInfo.isBound" type="default" @click="goToAddress(domainInfo.boundAddress)">查看绑定地址详情</JvActionButton>
         <button class="share-btn" @click="copyShareLink">📋 复制分享链接</button>
       </div>
+
+      <!-- DID 入口（v1: 已绑定时显示「数字身份 DID」链接） -->
+      <div v-if="domainInfo.isBound" class="did-entry">
+        <span class="did-entry-label">数字身份 DID</span>
+        <button class="did-entry-link" @click="$router.push(`/did/${domainInfo.name}.j`)">
+          {{ domainInfo.name }}.j — 点击进入该数字身份资料页 ↗
+        </button>
+      </div>
+
+      <!-- 打赏（v1: 已绑定时显示打赏按钮） -->
+      <JnsEndorse
+        v-if="domainInfo.isBound"
+        :jns-id="`${domainInfo.name}.j`"
+        :bound-address="domainInfo.boundAddress"
+        :owner="domainInfo.owner"
+      />
+
     </div>
 
     <!-- ===== 钱包操作(绑定/解绑/发送) ===== -->
@@ -290,6 +311,9 @@ import { useWalletStore } from '@/stores/wallet'
 import { detectAddressFormat, decodeJVA } from '@/utils/jvaddress'
 import { config as wagmiConfig } from '@/stores/wallet'
 import { JvActionButton, JvHashText, JvPageState, JvLoading } from '../design-system'
+import JnsEndorse from '@/components/JnsEndorse.vue'
+import JnsMintPanel from '@/components/JnsMintPanel.vue'
+import { canMintJns } from '@/utils/jns-endorse'
 
 const router = useRouter()
 const route = useRoute()
@@ -365,6 +389,39 @@ const activeTab = ref<'info' | 'send'>('info') // 信息/转移切换
 const transferAddress = ref('')
 const transferLoading = ref(false)
 const transferError = ref('')
+
+/** JNS 合约 owner（v1 用 `jns_contract.owner()` 读，用来判定 mint 入口可见性） */
+const jnsContractOwner = ref<string | null>(null)
+
+/** 读合约 owner（失败静默：读不到就不显示 mint 入口，宁可不显示也不误显示） */
+const loadJnsContractOwner = async () => {
+  try {
+    const owner = (await publicClient.readContract({
+      address: JNS_ADDRESS, abi: jnsABI, functionName: 'owner', args: [],
+    })) as string
+    jnsContractOwner.value = owner
+  } catch {
+    jnsContractOwner.value = null
+  }
+}
+
+/**
+ * mint 入口可见性：v1 条件 = 域名不存在 + 本链 + 本人是合约 owner。
+ * 「域名不存在」在这里体现为 domainInfo 为空（或搜索报错）。
+ */
+const showMintPanel = computed(() => {
+  // 没有任何查询时（刚进 /jns）不显示：v1 的按钮也挂在「已输入一个不存在的域名」之后
+  if (!searchQuery.value.trim()) return false
+  return canMintJns({
+    connectedAccount: walletStore.address,
+    contractOwner: jnsContractOwner.value,
+    chainId: 3666,
+    exists: !!domainInfo.value,
+  })
+})
+
+/** 铸造成功后重新查一次：域名现在存在了，mint 入口会自动消失 */
+const onMinted = () => { searchDomain() }
 
 /** 连接钱包 */
 const connectWallet = async () => {
@@ -683,6 +740,9 @@ const copyShareLink = () => {
 
 // ===== 路由参数处理 =====
 onMounted(() => {
+  // 合约 owner 与「查什么域名」无关，进页面就读一次（mint 入口可见性依赖它）
+  loadJnsContractOwner()
+
   // 支持 /jns/:name 路径参数或 ?domain=xxx 查询参数
   const nameParam = route.params.name as string
   const queryParam = route.query.domain as string

@@ -71,13 +71,13 @@
 | `/#/block/:blockId` | `blockInfos.html` | `/block/:number` `BlockDetail.vue` | 🟡 部分（仅支持高度，不支持哈希；缺确认数/extraData 文本） |
 | `/#/tx/:transactionId` | `transactionInfos.html` | `/tx/:hash` `TransactionDetail.vue` | 🟡 部分（缺 ABI 解码、地址标签、区块哈希跳转） |
 | `/#/address/:addressId` | `addressInfo.html`（618 行） | `/address/:address` `AddressDetail.vue` | 🟡 部分（资产面板覆盖 7 类，v1 有 9 类，见 §三 C） |
-| `/#/did/:jnsId` | `addressInfo.html`（DID 视图复用） | ❌ **无路由** | ❌ 缺失 |
+| `/#/did/:jnsId` | `addressInfo.html`（DID 视图复用） | `/did/:jnsId` `DidProfile.vue` | ✅ 已对齐（2026-11-24）|
 | `/#/cryptojunks` | `junksInfo.html` | ❌ 无 | ❌ 缺失（原判「废弃」，现要求移植） |
 | `/#/cryptojunks/page/:pageId` | 同上 | ❌ 无 | ❌ 缺失 |
 | `/#/cryptojunks/page/:pageId/id/:junkId` | 同上 | ❌ 无 | ❌ 缺失 |
 | `/#/redpacket`（创建） | `redpacketInfo.html` | ❌ 无（仅 toolbox 里有 redpacket 合约工具页） | ❌ 缺失（原判「废弃」，现要求移植） |
 | `/#/redpacket/:redpacketId`（抢） | 同上 | ❌ 无 | ❌ 缺失 |
-| `/#/jns/:jnsId` | `jnsInfo.html` | `/jns/:name` `JNSQuery.vue` | 🟡 部分（缺打赏/owner-only mint） |
+| `/#/jns/:jnsId` | `jnsInfo.html` | `/jns/:name` `JNSQuery.vue` | ✅ 已对齐（2026-11-24 补打赏 + owner-only mint）|
 | `/#/jnsvote/` | `jnsVoteInfo.html` | `/jnsvote` `JNSVote.vue` | ✅ 对等并超出（v2 有详情页 + 治理端） |
 | `/#/core/checkin/` | `coreCheckInInfo.html` | `/core/checkin` `CoreCheckinStats.vue` | ✅ 对等 |
 | `/tools/index.html` | 工具集入口 | `/tools` `ToolsHome.vue` | 🟡 部分（`contractx` 仍外链 v1） |
@@ -177,10 +177,10 @@ v2 缺：区块哈希行、ABI 解码切换、地址标签、双单位换算说�
 | 功能 | v1 | v2 |
 |---|---|---|
 | 概要（合约地址 / NFT 编号 / 图案 / 持有者 / 绑定地址） | ✅ | ✅ |
-| DID 链接（绑定后 `/#/did/:name`） | ✅ | ❌ |
+| DID 链接（绑定后 `/#/did/:name`） | ✅ | ✅（2026-11-24）|
 | 绑定 / 解绑 | ✅ | ✅ |
 | **赠予（give）** | ✅ 支持 `.j` 目标解析，二次确认弹窗 | 🟡 有「转移域名」，但**只支持地址，不支持 `.j`** |
-| **打赏（endorse）** | ✅ 1/2/5/10 WJ 快选 + 手动（0<x≤100），转 WJ 到绑定地址 | ❌ 无 |
+| **打赏（endorse）** | ✅ 1/2/5/10 WJ 快选 + 手动（0<x≤100），转 WJ 到绑定地址 | ✅ `JnsEndorse.vue`（2026-11-24）|
 | owner-only **mint** | ✅ 合约 owner 才显示 🔨 | ⏸ 原判「暂不实现（合约 owner-only）」，**但 UI 对等要求保留入口**（见 §四 P5-11） |
 | 错误提示（名称格式、`GM.j`/`Nana.j` 大小写例外） | ✅ | 🟡 部分 |
 
@@ -290,9 +290,9 @@ v1 的路由表里只有 14 条，v2 现有 **22 个视图**。多出来的部�
 11. WJ 发送 / JNS 转移支持 `.j` 域名解析（v1 两处都有）
 
 ### D. JNS（P5-9 ~ P5-11）
-12. DID 页 `/#/did/:jnsId`（复用地址视图，按域名反查地址）
-13. 打赏 endorse（1/2/5/10 + 手动 ≤100 WJ）
-14. owner-only mint 入口（保留 🔨，仅合约 owner 可见）
+12. ✅ DID 页 `/#/did/:jnsId`（2026-11-24，`DidProfile.vue` + `utils/did-resolve.ts`；复用地址视图按域名反查地址；未绑定 DOM 不复刻 v1 空白页 bug）
+13. ✅ 打赏 endorse（2026-11-24，`components/JnsEndorse.vue`；1/2/5/10 + 手动 0<x≤100 WJ；收方是**绑定地址**不是 owner）
+14. ✅ owner-only mint 入口（2026-11-24，`components/JnsMintPanel.vue`；本链 + 域名不存在 + 本人是合约 owner 才显示，未放开公开注册）
 
 ### E. CryptoJunks（P5-12）
 15. 全量浏览页：supply 状态、分页、铭文墙、标注说明、统计表、本地参照表 `punks/*.json`
@@ -319,7 +319,7 @@ v1 的路由表里只有 14 条，v2 现有 **22 个视图**。多出来的部�
 |---|---|---|---|---|
 | **P5-1 浏览基础对等** | 一键添加主网 + 全局搜索补全 + 区块/交易详情缺字段（首页能量项已于 11-19 撤销） | A + B | 1.5–2 天 | 搜索 **5 类**输入全部命中（`.j` / `j3…` / 40位hex / 66位tx / 区块号）+ 无法识别时弹帮助；区块页有确认数/extraData；交易页能切 ABI 解码 |
 | **P5-2 地址页对等** | 资产 4 类 + 新手加油 + `.j` 解析 | C | 1.5–2 天 | 4 类徽章显示且分批保护；两处 `.j` 解析成功 |
-| **P5-3 JNS 对等** | DID 页 + 打赏 + owner-only mint | D | 1–1.5 天 | DID 页可从地址页/域名页双向进入；打赏金额边界 0<x≤100 |
+| **P5-3 JNS 对等** | ✅ DID 页 + 打赏 + owner-only mint（2026-11-24 完成）| D | 1–1.5 天 | DID 页可从地址页/域名页双向进入；打赏金额边界 0<x≤100 |
 | **P5-4 CryptoJunks** | 全量浏览 + 统计 | E | 1–1.5 天 | 10000 枚分页不漏；元数据来源与 v1 一致（不额外压 RPC） |
 | **P5-5 链上红包** | 创建 / 抢 / 授权 | F | 1.5–2 天 | 2000 WJ / 500 个上限；JTI 资格校验；抢过提示 |
 | **P5-6 工具集对等** | 事件面板 + 5 合约 + 自定义 ABI | G | 2–3 天 | 事件按块号区间拉取不扫全链；自定义 ABI calldata 与 v1 一致；新增合约自动出现在 `/contracts` 目录 |

@@ -102,6 +102,12 @@ const routes = [
     path: '/jns/:name',
     name: 'jnsDetail',
     component: JNSQuery
+  },
+  {
+    path: '/did/:jnsId',
+    name: 'didProfile',
+    component: () => import('../views/DidProfile.vue'),
+    props: true
   }
 ]
 

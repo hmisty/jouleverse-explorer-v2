@@ -257,6 +257,34 @@ export const jnsABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
+  // 合约 owner（v1 用它判定是否显示 mint 按钮）
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // owner-only 铸造域名（v1 mintJNS 调用，合约层限定 owner）
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "name",
+        "type": "string"
+      }
+    ],
+    "name": "claim",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
   // ERC721 安全转账
   {
     "inputs": [

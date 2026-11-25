@@ -193,6 +193,20 @@
             <span class="tool-link">进入 →</span>
           </div>
         </router-link>
+
+        <router-link to="/cryptojunks" class="tool-card">
+          <div class="tool-card-header">
+            <h3 class="tool-card-title">
+              <span class="tool-icon">👾</span>
+              CryptoJunks 铭文
+            </h3>
+            <span class="tool-status status-migrated">已迁移</span>
+          </div>
+          <p class="tool-desc">10000 枚 Junk 铭文全量浏览（P5-4）：金/灰标、稀有度、分页与统计</p>
+          <div class="tool-card-footer">
+            <span class="tool-link">进入 →</span>
+          </div>
+        </router-link>
       </div>
     </section>
 

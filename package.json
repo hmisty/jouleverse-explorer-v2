@@ -11,6 +11,7 @@
     "smoke": "node scripts/smoke-jnsvote.mjs",
     "smoke:jns": "node scripts/smoke-jns-domains.mjs",
     "smoke:core-assets": "node scripts/smoke-core-assets.mjs",
+    "smoke:cryptojunks": "node scripts/smoke-cryptojunks.mjs",
     "test:jvaddress": "node --test tests/jvaddress.test.ts",
     "smoke:proposal-detail": "node scripts/smoke-jnsvote-proposal-detail.mjs",
     "check:roadmap": "node scripts/check-feature-roadmap.ts",

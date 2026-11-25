@@ -98,6 +98,26 @@ const routes = [
     name: 'jnsDomains',
     component: JnsDomains
   },
+  // CryptoJunks 三个路由与 v1 逐一对等（P5-4）：
+  //   /#/cryptojunks                          → 第 0 页
+  //   /#/cryptojunks/page/:pageId
+  //   /#/cryptojunks/page/:pageId/id/:junkId  单枚详情
+  // 页号方案见 utils/cryptojunks.ts（0-99 常规 / 1000-1002 broken / 10000-1000000 稀有度）
+  {
+    path: '/cryptojunks',
+    name: 'cryptojunks',
+    component: () => import('../views/CryptoJunks.vue')
+  },
+  {
+    path: '/cryptojunks/page/:pageId',
+    name: 'cryptojunksPage',
+    component: () => import('../views/CryptoJunks.vue')
+  },
+  {
+    path: '/cryptojunks/page/:pageId/id/:junkId',
+    name: 'cryptojunksJunk',
+    component: () => import('../views/CryptoJunks.vue')
+  },
   {
     path: '/jns/:name',
     name: 'jnsDetail',

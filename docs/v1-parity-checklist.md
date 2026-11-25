@@ -72,9 +72,9 @@
 | `/#/tx/:transactionId` | `transactionInfos.html` | `/tx/:hash` `TransactionDetail.vue` | 🟡 部分（缺 ABI 解码、地址标签、区块哈希跳转） |
 | `/#/address/:addressId` | `addressInfo.html`（618 行） | `/address/:address` `AddressDetail.vue` | 🟡 部分（资产面板覆盖 7 类，v1 有 9 类，见 §三 C） |
 | `/#/did/:jnsId` | `addressInfo.html`（DID 视图复用） | ❌ **无路由** | ❌ 缺失 |
-| `/#/cryptojunks` | `junksInfo.html` | ❌ 无 | ❌ 缺失（原判「废弃」，现要求移植） |
-| `/#/cryptojunks/page/:pageId` | 同上 | ❌ 无 | ❌ 缺失 |
-| `/#/cryptojunks/page/:pageId/id/:junkId` | 同上 | ❌ 无 | ❌ 缺失 |
+| `/#/cryptojunks` | `junksInfo.html` | `/cryptojunks` `CryptoJunks.vue` | ✅ 已对等（P5-4，2026-11-25） |
+| `/#/cryptojunks/page/:pageId` | 同上 | `/cryptojunks/page/:pageId` `CryptoJunks.vue` | ✅ 已对等（P5-4；页号方案原样保留 0-99/1000-1002/10000/100000/1000000） |
+| `/#/cryptojunks/page/:pageId/id/:junkId` | 同上 | `/cryptojunks/page/:pageId/id/:junkId` `CryptoJunks.vue` | ✅ 已对等（P5-4；单枚模式只拉那一枚） |
 | `/#/redpacket`（创建） | `redpacketInfo.html` | ❌ 无（仅 toolbox 里有 redpacket 合约工具页） | ❌ 缺失（原判「废弃」，现要求移植） |
 | `/#/redpacket/:redpacketId`（抢） | 同上 | ❌ 无 | ❌ 缺失 |
 | `/#/jns/:jnsId` | `jnsInfo.html` | `/jns/:name` `JNSQuery.vue` | 🟡 部分（缺打赏/owner-only mint） |
@@ -392,7 +392,7 @@ v1 的路由表里只有 14 条，v2 现有 **22 个视图**。多出来的部�
 | 资产面板"只 6 类" | `grep -c "key: '" src/config/core-assets.ts` | ❌ **数错了**：实为 **7 类** |
 | 缺 6 个合约 | 逐行解析 v1 工具页 + 区分 `/* */` 注释状态 | ❌ **错 2 个**：`CJDAO多签`/`Timelock0` 在 v1 是注释状态，不算缺口。真名单 **5 个** |
 | 全局搜索支持区块哈希 | 读 `processRequest()` 分支可达性 | ❌ **v1 也是死代码**：64 位必进 tx 分支，区块哈希分支永不可达 |
-| DID / cryptojunks / redpacket 路由 | `grep -c` 三条路由 | ✅ 三条确实全缺（v2 = 0） |
+| DID / cryptojunks / redpacket 路由 | `grep -c` 三条路由 | ✅ 当时三条确实全缺（v2 = 0）。**2026-11-25 更新：cryptojunks 三条已由 P5-4 补齐**，DID（PR #102）与 redpacket 仍待 |
 | JNS 打赏 / mint | `grep -ci "endorse\|打赏\|mint"` | ✅ 确实全缺 |
 | 新手加油 | `grep -c withdrawTo AddressDetail.vue` | ✅ 确实缺 |
 | `.j` 解析：JNS 转移 | 读 `transferJnsDomain()` | ✅ 确实缺（只支持 hex / B32 / full JVA） |

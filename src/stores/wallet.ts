@@ -3,7 +3,9 @@ import { ref } from 'vue'
 import { createConfig, http } from 'wagmi'
 import { injected } from 'wagmi/connectors'
 import { getPublicClient, reconnect, connect as wagmiConnect, disconnect as wagmiDisconnect } from '@wagmi/core'
+import type { Address } from 'viem'
 import { ChainMismatchError, isChainMismatch, isUserRejected } from '../utils/wallet-errors'
+import { accountChanged, syncWalletAccount } from '../utils/wallet-account'
 
 // Jouleverse chain config
 const jouleverse = {
@@ -45,6 +47,49 @@ export const useWalletStore = defineStore('wallet', () => {
   const wjBalance = ref<bigint | null>(null)
   const isConnecting = ref(false)
 
+  // ── 账户状态与钱包的一致性校正（2026-11-27 4100 故障根因修复）──
+  //
+  // 写操作的 `from` 取自 **wagmi state**（config.state.connections），
+  // 而界面校验「当前地址 / 页面地址」用本 store 的 `address`。二者一旦分叉，
+  // 就会「界面显示已连接、钱包弹不出签名框、直接报 4100 UnauthorizedProvider」。
+  // 分叉根因与修复见 `src/utils/wallet-account.ts` 文件头注释。
+  /** 把 wagmi state 里 current 连接的账户校正为钱包真实账户（不弹窗、不发交易）。 */
+  const reconcileAccount = async (): Promise<Address | null> => {
+    return syncWalletAccount(config, jouleverse.id)
+  }
+
+  /** 让 store + wagmi state 同时对齐钱包侧真实账户（写操作前调用）。 */
+  const syncAccount = async (): Promise<string | null> => {
+    const account = await reconcileAccount()
+    if (!account) return null
+    if (accountChanged(address.value, account)) {
+      address.value = account
+      isConnected.value = true
+      await refreshBalances()
+    }
+    return account
+  }
+
+  /**
+   * 重新向钱包申请账户授权（会弹授权框），成功后校正 state，返回可用账户。
+   * 用于写操作收到 4100（UnauthorizedProvider）后的自愈：4100 表示钱包不认
+   * 当前请求的账户，唯一可靠解法是显式重授权，而不是让用户自己去「断开重连」。
+   */
+  const reauthorize = async (): Promise<string | null> => {
+    const connector = config.connectors[0]
+    if (!connector) return null
+    const provider = await connector.getProvider().catch(() => undefined)
+    if (!provider) return null
+    // 显式请求账户授权（MetaMask 会弹窗；已授权时静默返回）
+    await provider.request({ method: 'eth_requestAccounts' })
+    const account = await syncAccount()
+    if (account) {
+      await getBalance()
+      await getWJBalance()
+    }
+    return account
+  }
+
   // 检查是否连接
   const checkConnection = async () => {
     try {
@@ -65,12 +110,12 @@ export const useWalletStore = defineStore('wallet', () => {
         // isConnected/address 不够——wagmi 内部 state.current 仍为空，后续
         // writeContract 会抛 ConnectorNotConnectedError。这里用 connect action 把
         // 连接正式写入 state（injected 已授权时静默、不弹窗）。
-        try {
-          await wagmiConnect(config, { connector, chainId: jouleverse.id })
-        } catch {
-          // 已连接（state.current 已是本 connector）或其余失败：忽略。
-          // store 的 isConnected/address 已就绪，展示层不受影响。
-        }
+        //
+        // ⚠️ 2026-11-27 修正：原实现调 wagmiConnect() 补写，在「本会话已连过」时
+        // 必抛 ConnectorAlreadyConnectedError 被 catch 吞掉，state 因此保留**旧账户**，
+        // 导致写操作 from 用旧账户 → 钱包报 4100。改用 reconcileAccount()：已存在连接
+        // 就地校正账户，未连接才走 connect。
+        await reconcileAccount()
       } else {
         isConnected.value = false
         address.value = null
@@ -129,6 +174,8 @@ export const useWalletStore = defineStore('wallet', () => {
         isConnected.value = true
         await getBalance()
         await getWJBalance()
+        // reconnect 返回的账户来自 storage 快照，可能已过期（用户在此期间换了账户）
+        await reconcileAccount()
       } else {
         await checkConnection()
       }
@@ -272,8 +319,7 @@ export const useWalletStore = defineStore('wallet', () => {
   }
 
   // 格式化地址
-  const formatAddress = (addr: string | null): string => {
-    if (!addr) return ''
+  const formatAddress = (addr: string | null): string => {    if (!addr) return ''
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`
   }
 
@@ -297,6 +343,8 @@ export const useWalletStore = defineStore('wallet', () => {
     refreshBalances,
     checkConnection,
     restoreConnection,
+    syncAccount,
+    reauthorize,
     formatAddress,
     formatBalance,
   }

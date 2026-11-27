@@ -3,8 +3,8 @@
 // 文案是「连接到了错误的网络 (chainId=N)」，两者不共享子串 → 必然漏判、连弹两个
 // 互相矛盾的 toast。下面用例覆盖该回归。
 import { describe, it, expect } from 'vitest'
-import { BaseError, UserRejectedRequestError } from 'viem'
-import { ChainMismatchError, isChainMismatch, isUserRejected, extractRpcCode } from '../src/utils/wallet-errors'
+import { BaseError, UnauthorizedProviderError, UserRejectedRequestError } from 'viem'
+import { ChainMismatchError, isChainMismatch, isUserRejected, isUnauthorizedProvider, extractRpcCode } from '../src/utils/wallet-errors'
 
 const CHAIN = { id: 3666, name: 'Jouleverse' }
 
@@ -75,6 +75,41 @@ describe('extractRpcCode', () => {
   it('无 code 返回 undefined（不猜）', () => {
     expect(extractRpcCode(new Error('boom'))).toBeUndefined()
     expect(extractRpcCode('boom')).toBeUndefined()
+  })
+})
+
+describe('isUnauthorizedProvider（EIP-1193 4100）', () => {
+  it('识别 viem 的 UnauthorizedProviderError', () => {
+    expect(isUnauthorizedProvider(new UnauthorizedProviderError(new Error('nope')))).toBe(true)
+  })
+
+  it('识别钱包抛的原始 EIP-1193 对象（code=4100）', () => {
+    expect(isUnauthorizedProvider(Object.assign(new Error('unauthorized'), { code: 4100 }))).toBe(true)
+  })
+
+  it('识别被 viem 包在 cause 链深处的 4100', () => {
+    const wrapped = new BaseError('sendTransaction failed', {
+      cause: new UnauthorizedProviderError(new Error('nope')),
+    })
+    expect(isUnauthorizedProvider(wrapped)).toBe(true)
+  })
+
+  it('文案相同但类型/码不同 → 不认（防止误判成 4100 而走错自愈分支）', () => {
+    const fake = new Error(
+      'The requested method and/or account has not been authorized by the user.',
+    )
+    expect(isUnauthorizedProvider(fake)).toBe(false)
+  })
+
+  it('4001（用户拒绝）不得被误判为 4100 —— 两者处置完全不同', () => {
+    expect(isUnauthorizedProvider(Object.assign(new Error('x'), { code: 4001 }))).toBe(false)
+    expect(isUnauthorizedProvider(new UserRejectedRequestError(new Error('denied')))).toBe(false)
+  })
+
+  it('普通错误 / null / undefined 不算', () => {
+    expect(isUnauthorizedProvider(new Error('boom'))).toBe(false)
+    expect(isUnauthorizedProvider(null)).toBe(false)
+    expect(isUnauthorizedProvider(undefined)).toBe(false)
   })
 })
 

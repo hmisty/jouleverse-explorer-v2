@@ -64,6 +64,7 @@ import { writeContract, switchChain, waitForTransactionReceipt } from 'wagmi/act
 import { config as wagmiConfig } from '../stores/wallet'
 import { JvPageState, JvStatusTag, JvActionButton } from '../design-system'
 import { safeErrorMessage } from '../utils/error'
+import { isUnauthorizedProvider } from '../utils/wallet-errors'
 import type { NFTMetadata } from '../types/coreid'
 
 interface Props {
@@ -144,14 +145,55 @@ const handleCheckIn = async () => {
   checkInError.value = null
   checkInStatus.value = null
   try {
+    // 1. 先把 wagmi state 校正到钱包当前真实账户。
+    //    写操作的 from 取自 wagmi state，若不校正，state 里残留旧账户时
+    //    钱包会直接报 4100（不弹签名框），用户只能靠「断开重连」自救。
+    //    （2026-11-27 真实故障：桌面 MetaMask 刷新页后签到报 4100，断开重连即好）
+    const account = await walletStore.syncAccount()
+    if (!account) {
+      checkInError.value = '钱包账户不可用，请重新连接钱包'
+      loadingCheckIn.value = false
+      return
+    }
+    if (account.toLowerCase() !== props.address.toLowerCase()) {
+      checkInError.value = `钱包当前账户不是此页面地址（${walletStore.formatAddress(account)}），请切换账户后再试`
+      loadingCheckIn.value = false
+      return
+    }
+
     try { await switchChain(wagmiConfig, { chainId: jouleverseChain.id }) } catch {
       checkInError.value = '请先在钱包中手动切换到 Jouleverse 网络（Chain ID: 3666，RPC: https://rpc.jnsdao.com）'
       loadingCheckIn.value = false
       return
     }
-    const hash = await writeContract(wagmiConfig, {
+
+    // 2. 显式带 account：让「界面校验的地址」与「实际签名的 from」必然是同一个
+    const submit = (from: `0x${string}`) => writeContract(wagmiConfig, {
       address: JVCORE_ADDRESS, abi: jvcoreABI, functionName: 'checkIn', args: [props.coreId],
+      account: from,
     })
+
+    let hash: `0x${string}`
+    try {
+      hash = await submit(account as `0x${string}`)
+    } catch (error) {
+      // 3. 4100（钱包未授权该账户/方法）：重新授权一次再重试，不把英文原文甩给用户
+      if (!isUnauthorizedProvider(error)) throw error
+      checkInStatus.value = '钱包未授权本次操作，正在请求重新授权...'
+      const reauthorized = await walletStore.reauthorize()
+      if (!reauthorized) {
+        checkInError.value = '钱包未授权本次签到，请在钱包中重新授权后再试'
+        loadingCheckIn.value = false
+        return
+      }
+      if (reauthorized.toLowerCase() !== props.address.toLowerCase()) {
+        checkInError.value = `重授权后的账户不是此页面地址（${walletStore.formatAddress(reauthorized)}），请切换账户后再试`
+        loadingCheckIn.value = false
+        return
+      }
+      hash = await submit(reauthorized as `0x${string}`)
+    }
+
     checkInStatus.value = `交易已提交，等待链上确认... (${hash.slice(0, 10)}...)`
     await waitForTransactionReceipt(wagmiConfig, { hash })
     checkInStatus.value = '签到成功！状态已更新。'
@@ -159,7 +201,9 @@ const handleCheckIn = async () => {
     localLastCheckInAt.value = now.value
     emit('checkedIn')
   } catch (error) {
-    checkInError.value = '签到失败: ' + safeErrorMessage(error)
+    checkInError.value = '签到失败: ' + (isUnauthorizedProvider(error)
+      ? '钱包未授权本次操作，请点右上角「断开」后重新连接钱包再试'
+      : safeErrorMessage(error))
   } finally {
     loadingCheckIn.value = false
   }

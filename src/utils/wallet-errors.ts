@@ -6,7 +6,7 @@
 // 为什么不用 message 字符串匹配：文案会随库升级 / i18n 变更，且「连接到了错误的
 // 网络」与「请在钱包中切换」并不共享稳定的子串——用文案判定必然漏判。
 
-import { BaseError, UserRejectedRequestError } from 'viem'
+import { BaseError, UnauthorizedProviderError, UserRejectedRequestError } from 'viem'
 
 /** 连接到了预期之外的链。携带实际 chainId（数值），供上层决定是否自动切换。 */
 export class ChainMismatchError extends Error {
@@ -52,6 +52,30 @@ export function isUserRejected(error: unknown): boolean {
       const code = (e as { code?: unknown }).code
       // EIP-1193: user rejected request = 4001
       if (code === UserRejectedRequestError.code || code === String(UserRejectedRequestError.code)) return true
+    }
+    return false
+  }
+  if (error instanceof BaseError) return error.walk(hit) !== null
+  return hit(error)
+}
+
+/**
+ * 判定「钱包未授权本次请求」（EIP-1193 4100，viem 文案：
+ * "The requested method and/or account has not been authorized by the user."）。
+ *
+ * 典型成因（2026-11-27 真实故障）：dapp 发出的交易 from 账户与钱包当前授权账户
+ * 不一致（wagmi state 里残留旧账户），钱包直接拒绝，且**不会**弹签名框 ——
+ * 与用户主动拒绝（4001）语义完全不同，处置也不同：4100 应重新授权 + 校正账户后续重试，
+ * 而不是提示「已取消」。
+ *
+ * 判定只看类型 / 数值码，不看文案（同 isUserRejected 的理由）。
+ */
+export function isUnauthorizedProvider(error: unknown): boolean {
+  const hit = (e: unknown): boolean => {
+    if (e instanceof UnauthorizedProviderError) return true
+    if (typeof e === 'object' && e !== null) {
+      const code = (e as { code?: unknown }).code
+      if (code === UnauthorizedProviderError.code || code === String(UnauthorizedProviderError.code)) return true
     }
     return false
   }

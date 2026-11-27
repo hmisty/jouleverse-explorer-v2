@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import {
   NConfigProvider,
   NMessageProvider,
@@ -7,7 +7,8 @@ import {
   NNotificationProvider,
   NLoadingBarProvider,
 } from 'naive-ui'
-import { useWalletStore } from './stores/wallet'
+import { watchAccount } from '@wagmi/core'
+import { useWalletStore, config as wagmiConfig } from './stores/wallet'
 import { useThemeStore } from './stores/theme'
 
 const walletStore = useWalletStore()
@@ -25,9 +26,21 @@ const handleDisconnect = async () => {
   await walletStore.disconnect()
 }
 
+// 全局账户监听注销函数（在 setup 顶层同步声明，避免 onMounted 内注册后无法清理）
+let unwatchAccount: (() => void) | undefined
+onUnmounted(() => { unwatchAccount?.() })
+
 onMounted(() => {
   // 恢复已连接状态：等待钱包 provider 就绪 + reconnect 静默恢复（不弹窗）
   walletStore.restoreConnection()
+  // 全局账户同步：钱包里换账户后，store.address 必须跟着变。
+  // 否则各页面的「当前地址 / 页面地址」校验仍拿旧值，而写操作的 from 已换成新账户，
+  // 两侧不一致 → 钱包报 4100（2026-11-27 签到故障的同类场景）。
+  unwatchAccount = watchAccount(wagmiConfig, {
+    onChange(connection) {
+      if (connection.address) walletStore.syncAccount()
+    },
+  })
 })
 </script>
 

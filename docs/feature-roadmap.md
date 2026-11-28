@@ -53,8 +53,9 @@
 | 33 | 通用经典多签管理 | ✅ 已完成 | `Multisig.vue` | `/tools/multisig`；任意兼容地址、分页、审阅、发送前复核 |
 | 34 | 链上交易核验与记录导出工具 | ✅ 已完成 | `ReceiptVerifier.vue` + `services/receipt-verifier.ts` | `/tools/receipt`；最多5个只读请求；归属一致性/重组检查；机器可读快照导出；不等于支付/履约成功，详见 `receipt-verifier.md` |
 | 35 | 生态接入验收 | ✅ 已完成 | `NetworkReadiness.vue` + `services/network-readiness.ts` | `/tools/integration`；本地清单导出、最多8次只读请求、能力边界明确；详见network-readiness.md |
+| 36 | 链上红包（创建/抢/取回） | ✅ 已完成 | `RedPacket.vue` + `composables/useRedPacket.ts` + `utils/redpacket.ts` | `/redpacket`（创建）+ `/redpacket/:packetId`（抢）；对齐 v1 `redpacketInfo.html`：≤2000 WJ / ≤500 个、WJ 授权、幸运数字抽签、JTI 资格、每地址每包一次、领取记录、过期发起人取回；合约 `openers` 为 private 无 getter，历史靠 `inspect` 有界遍历（≤500） |
 
-> **本表覆盖度自检（2026-11-03 更新，并行 PR #65/#66/#67/#68 合入后顺延编号）**：`src/views/` 下共 **22** 个视图，本表 #1–#35 已全部覆盖（0 漏项）。
+> **本表覆盖度自检（2026-11-28 更新，新增 P5-5 红包页）**：`src/views/` 下共 **23** 个视图，本表 #1–#36 已全部覆盖（0 漏项）。
 > 注：#29 是组件层（`components/` + `composables/`）而非独立视图，从 #36 起如再新增组件级模块可延续此编号。
 > 复算方法：
 > ```bash
@@ -187,7 +188,7 @@
 | **P5-2 地址页对等** | 资产面板补 Planet / FlyingJ / JNSDAO V（含 npub）/ CryptoJunks 墙；「新手加油 0.005 J」；WJ 发送与 JNS 转移支持 `.j` 解析 | 1.5–2 天 | ⏳ 待开工 |
 | **P5-3 JNS 对等** | `/#/did/:name` DID 页；打赏 endorse（1/2/5/10 + 手动 ≤100 WJ）；owner-only mint 入口 | 1–1.5 天 | ⏳ 待开工 |
 | **P5-4 CryptoJunks** | 全量浏览页：supply 状态 / 分页（100 一页）/ 铭文墙 / 标注说明 / 静态统计表 | 1–1.5 天 | ⏳ 待开工 |
-| **P5-5 链上红包** | 创建（总额 ≤2000 WJ、≤500 个、WJ 授权）+ 红包信息 + 抢（幸运数字 + JTI 资格）+ 复制 | 1.5–2 天 | ⏳ 待开工 |
+| **P5-5 链上红包** | 创建（总额 ≤2000 WJ、≤500 个、WJ 授权）+ 红包信息 + 抢（幸运数字 + JTI 资格）+ 复制 | 1.5–2 天 | ✅ 已完成（2026-11-28）|
 | **P5-6 工具集对等** | 合约工具补**事件查询/订阅面板**；补 6 个缺失合约注册（`节点PoS` / `投票权PoS` / `CJDAO多签` / `Timelock0` / `JTI2Config` / `ecofund1`）；**自定义 ABI 交互**（`/tools/custom`）并下线 `contractx` 外链 | 2–3 天 | ⏳ 待开工 |
 | **P5-7 合约验证** | 地址页合约源码展示 + solc Web Worker 编译比对（版本/optimizer/evmVersion 取自部署清单），复现 v1 的 `exactMatch / partialMatch` | 2–3 天 | ⏳ 待开工 |
 | **P5-8 切换就绪** | 全量回归 + v1/v2 双跑逐页对照 + 切换方案（301/302 + 公告） | 1–2 天 | ⏳ 待开工 |
@@ -291,12 +292,12 @@
 | 全局搜索输入解析 | `tests/search-resolve.spec.ts` 30 条（JNS/HEX/B32/交易/区块号五类 + 无法识别 + 帮助示例自校验）。抽自 `Home.vue handleSearch` 内联分支，改为 `src/utils/search-resolve.ts` 纯函数。修了两个真 bug：① 40 位全数字地址被 `/^\d+$/` 抢走当区块号；② 无法识别时静默 `push('/block/<乱码>')` | ✅ 已合入 | PR #95 |
 | **交易详情四项对等** | 按 `docs/v1-parity-checklist.md` §2.3·C 补 v1 的四个字段：① 区块哈希行（`receipt.blockHash ?? tx.blockHash`，可点进区块页）② 地址标签（`src/utils/address-label.ts`，复用 `toolbox.ts` 12 合约注册表，11 条用例含大小写/空白/未注册不误判）③ ABI 解码切换（`src/utils/abi-decode.ts`，按 4 字节选择器索引 12 份 ABI 后 `viem.decodeFunctionData`，14 条用例含碰撞兜底与解不出返回 null）④ 双单位 Gas 价格与手续费（`src/utils/amount-dual.ts`，`1 J = 1e9 Gwei`，21 条用例含 2^53 精度边界）。另 `src/utils/add-chain.ts` 一键添加主网（EIP-3085 + EIP-3326，切换优先失败再添加，20 条用例覆盖 4902/4001/无钱包） | 🟡 待合入 | 本 PR |
 | **测试基线一致性门禁** | 治「基线腐烂」第三次复发：`docs/feature-roadmap.md` 的用例数**从未绑定任何会失败的检查**，靠自觉维护，于是 11-10 落后 231 条 / 11-11 落后 238 条 / 11-16 落后 4 条。新增 `scripts/check-test-baseline.ts`：实跑 vitest（JSON reporter）+ node:test（TAP reporter），把 vitest passed / files、node:test passed、合计、以及「计数口径提醒」行的三个数字逐项与文档比对，任一不等即 EXIT 1；测试自身有失败也拒绝给绿灯；文档自身不自洽（合计 ≠ 两项之和）同样拦。配套 `tests/test-baseline-gate.spec.ts` 15 条（正向 3 / 解析失败负向 4 / 数字不符负向 6 / 产物格式负向 2） | ✅ 已合入 | 本 PR |
-**当前基线**（`explorer-v2` 分支 `02c7563`（#89 合入后），2026-11-20 实测）：`npm run build` EXIT 0 / `vitest run` **427 passed**（32 files）/ `node --test tests/jvaddress.test.ts` **3 passed**（合计 **430** 条）。
+**当前基线**（`feat/1128-daily` 分支（P5-5 红包页），2026-11-28 实测）：`npm run build` EXIT 0 / `vitest run` **540 passed**（36 files）/ `node --test tests/jvaddress.test.ts` **3 passed**（合计 **543** 条）。
 
-> 基线演进：13（PR #51~#54 前）→ **22**（PR #56 theme store 9 条）→ **29**（PR #62 gov-pending-ids 7 条）→ **209**（PR #69 路线图检查器 + 之前各批用例）→ **260**（PR #75 前实测，20 files）→ **267**（PR #77 roadmap-status 7 条，21 files）→ **272**（PR #76 路由可达性净增 2 条 + 部署基线冻结 3 条，22 files）→ **276**（PR #87 补 `tests/jnsvote-guide.spec.ts` 4 条，23 files）→ **290**（`tests/revert-decode.spec.ts` 14 条，24 files）→ **314**（区块详情页对等：`tests/block-detail.spec.ts` 18 条 + `tests/block-detail-view.spec.ts` 6 条，26 files）→ **344**（全局搜索输入解析：`tests/search-resolve.spec.ts` 30 条，27 files）→ **359**（基线门禁 `tests/test-baseline-gate.spec.ts` 15 条，28 files）→ **427**（交易详情四项对等 + 一键添加主网：`tests/address-label.spec.ts` 11 + `tests/abi-decode.spec.ts` 14 + `tests/amount-dual.spec.ts` 21 + `tests/add-chain.spec.ts` 22，32 files）。
+> 基线演进：13（PR #51~#54 前）→ **22**（PR #56 theme store 9 条）→ **29**（PR #62 gov-pending-ids 7 条）→ **209**（PR #69 路线图检查器 + 之前各批用例）→ **260**（PR #75 前实测，20 files）→ **267**（PR #77 roadmap-status 7 条，21 files）→ **272**（PR #76 路由可达性净增 2 条 + 部署基线冻结 3 条，22 files）→ **276**（PR #87 补 `tests/jnsvote-guide.spec.ts` 4 条，23 files）→ **290**（`tests/revert-decode.spec.ts` 14 条，24 files）→ **314**（区块详情页对等：`tests/block-detail.spec.ts` 18 条 + `tests/block-detail-view.spec.ts` 6 条，26 files）→ **344**（全局搜索输入解析：`tests/search-resolve.spec.ts` 30 条，27 files）→ **359**（基线门禁 `tests/test-baseline-gate.spec.ts` 15 条，28 files）→ **427**（交易详情四项对等 + 一键添加主网：`tests/address-label.spec.ts` 11 + `tests/abi-decode.spec.ts` 14 + `tests/amount-dual.spec.ts` 21 + `tests/add-chain.spec.ts` 22，32 files）。→ **448**（PR #104 钱包账户分叉修复，33 files）→ **540**（P5-5 红包：`tests/redpacket.spec.ts` 77 + `tests/redpacket-abi.spec.ts` 11 + `tests/redpacket-view.spec.ts` 19 + `tests/page-state.spec.ts` 6，36 files）。
 > 上表各项现全部为「已合入」。**2026-10-30 这批（#57/#58/#56/#59）与 2026-11-03 这批（#60/#61/#62）均已全部 merge**；#76 与 #77 于 2026-11-13 合入，#87 于 2026-11-15 合入，#90/#91/#93/#94/#95 于 2026-11-20 合入；open PR 仅剩 **#78**（维持不合入，待作者在独立 repo 落地自持地址表/可安装/补 LICENSE）。
 >
-> ⚠️ 计数口径提醒：`npm test` = vitest **427** + node:test 3 = **430 条**。写 PR 描述或文档时别只抄 vitest 数字又说「npm test N passed」——PR #62 描述里写「vitest 22 passed」就是这个错（当时实际已是 29）。
+> ⚠️ 计数口径提醒：`npm test` = vitest **540** + node:test 3 = **543 条**。写 PR 描述或文档时别只抄 vitest 数字又说「npm test N passed」——PR #62 描述里写「vitest 22 passed」就是这个错（当时实际已是 29）。
 > ✅ **本行已由 `scripts/check-test-baseline.ts` 强制守护**（2026-11-16 起）。此前它无任何会失败的检查绑定，只能靠自觉，先后腐烂三次（11-10 落后 231 条、11-11 落后 238 条、11-16 落后 4 条）。现规则有牙齿：数字不符 CI 直接红，`npm run check:baseline` 本地可复现。
 
 **两条必须记住的规则**：

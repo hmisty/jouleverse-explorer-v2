@@ -193,6 +193,20 @@
             <span class="tool-link">进入 →</span>
           </div>
         </router-link>
+
+        <router-link to="/redpacket" class="tool-card">
+          <div class="tool-card-header">
+            <h3 class="tool-card-title">
+              <span class="tool-icon">🧧</span>
+              链上红包
+            </h3>
+            <span class="tool-status status-migrated">已迁移</span>
+          </div>
+          <p class="tool-desc">创建红包（≤2000 WJ / ≤500 个）、抢红包（JTI 资格）、领取记录与过期取回</p>
+          <div class="tool-card-footer">
+            <span class="tool-link">进入 →</span>
+          </div>
+        </router-link>
       </div>
     </section>
 

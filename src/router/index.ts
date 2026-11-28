@@ -89,6 +89,16 @@ const routes = [
     props: true
   },
   {
+    path: '/redpacket',
+    name: 'redPacketCreate',
+    component: () => import('../views/RedPacket.vue')
+  },
+  {
+    path: '/redpacket/:packetId',
+    name: 'redPacketOpen',
+    component: () => import('../views/RedPacket.vue')
+  },
+  {
     path: '/jns',
     name: 'jnsQuery',
     component: JNSQuery

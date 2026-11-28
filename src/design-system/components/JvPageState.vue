@@ -108,6 +108,14 @@ const defaultMeta: Record<PageStateType, { title: string; desc: string }> = {
 
       <!-- 补充说明文字 -->
       <template #default>
+        <!--
+          NEmpty 的 title 走 description prop，我们覆盖了默认插槽，所以标题必须自己渲染。
+          此前这里只渲染 description，导致所有传 title 的调用点（20 处）标题都静默丢失，
+          用户只看到说明文字、看不到「红包不存在」这类关键标题。
+        -->
+        <p v-if="title !== undefined || defaultMeta[type].title" class="jv-state-title">
+          {{ title ?? defaultMeta[type].title }}
+        </p>
         <p class="jv-state-desc">
           {{ description ?? defaultMeta[type].desc }}
         </p>
@@ -137,6 +145,14 @@ const defaultMeta: Record<PageStateType, { title: string; desc: string }> = {
 .jv-state-icon {
   width: 64px;
   height: 64px;
+}
+
+.jv-state-title {
+  color: var(--jv-text-primary);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  margin: 0 auto 6px;
 }
 
 .jv-state-desc {
